@@ -1,0 +1,16 @@
+{
+  "name": "clearaudio",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "dev:web": "bun run --filter web dev",
+    "dev:engine": "cd apps/engine && PYTHONPATH=src uv run uvicorn engine.main:app --reload --port 8000",
+    "build": "bun run --filter '*' build",
+    "build:web": "bun run --filter web build"
+  }
+}
+

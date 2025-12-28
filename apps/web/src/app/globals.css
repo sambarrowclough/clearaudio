@@ -1,0 +1,591 @@
+@import "tailwindcss";
+
+/* ========================================
+   Mac System 1 (1984) Design System
+   Strict 1-bit: Black, White, Dithered
+   ======================================== */
+
+:root {
+  --mac-black: #000000;
+  --mac-white: #FFFFFF;
+  --font-chicago: 'Chicago FLF', 'ChicagoFLF', 'Geneva', 'Charcoal', monospace;
+}
+
+/* Disable antialiasing for authentic pixelated look */
+* {
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Prevent body scrolling - using Radix ScrollArea instead */
+html,
+body {
+  overflow: hidden;
+  height: 100vh;
+  margin: 0;
+}
+
+/* Hide native scrollbar - using Radix ScrollArea instead */
+body::-webkit-scrollbar,
+[data-radix-scroll-area-viewport]::-webkit-scrollbar {
+  display: none;
+}
+
+body,
+[data-radix-scroll-area-viewport] {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ========================================
+   Desktop Background - Dithered Gray Pattern
+   ======================================== */
+
+.mac-desktop {
+  min-height: 100vh;
+  background-color: var(--mac-white);
+  background-image: url("data:image/svg+xml,%3Csvg width='4' height='4' viewBox='0 0 4 4' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h2v2H0zM2 2h2v2H2z' fill='%23000000' fill-opacity='1'/%3E%3C/svg%3E");
+  background-size: 4px 4px;
+  font-family: var(--font-chicago);
+  color: var(--mac-black);
+  padding: 20px;
+}
+
+/* ========================================
+   Mac Window
+   ======================================== */
+
+.mac-window {
+  background: var(--mac-white);
+  border: 3px solid var(--mac-black);
+  box-shadow: 6px 6px 0 var(--mac-black);
+  max-width: 700px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Title Bar with horizontal stripes */
+.mac-title-bar {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  border-bottom: 3px solid var(--mac-black);
+  background:
+    repeating-linear-gradient(0deg,
+      var(--mac-white) 0px,
+      var(--mac-white) 2px,
+      var(--mac-black) 2px,
+      var(--mac-black) 4px);
+  padding: 0 8px;
+  gap: 12px;
+}
+
+/* Close box */
+.mac-close-box {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--mac-black);
+  background: var(--mac-white);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.mac-close-box:hover {
+  background: var(--mac-black);
+}
+
+/* Title text container */
+.mac-title {
+  flex: 1;
+  text-align: center;
+  font-size: 16px;
+  font-weight: normal;
+  letter-spacing: 0;
+  background: var(--mac-white);
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+/* Resize corner indicator */
+.mac-resize {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* Window content area */
+.mac-content {
+  padding: 24px;
+}
+
+/* ========================================
+   Mac Buttons - 3D Beveled Style
+   ======================================== */
+
+.mac-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 20px;
+  font-family: var(--font-chicago);
+  font-size: 16px;
+  background: var(--mac-white);
+  border: 2px solid var(--mac-black);
+  border-radius: 8px;
+  box-shadow:
+    inset -2px -2px 0 var(--mac-black),
+    inset 2px 2px 0 var(--mac-white);
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.mac-button:hover {
+  background: var(--mac-black);
+  color: var(--mac-white);
+}
+
+.mac-button:active {
+  box-shadow:
+    inset 1px 1px 0 var(--mac-black),
+    inset -1px -1px 0 var(--mac-white);
+}
+
+.mac-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mac-button:disabled:hover {
+  background: var(--mac-white);
+  color: var(--mac-black);
+}
+
+/* Primary button - filled */
+.mac-button-primary {
+  background: var(--mac-black);
+  color: var(--mac-white);
+  border-width: 3px;
+  border-radius: 10px;
+  padding: 12px 36px;
+  font-size: 18px;
+}
+
+.mac-button-primary:hover {
+  background: var(--mac-white);
+  color: var(--mac-black);
+}
+
+/* ========================================
+   Mac Text Input - Inset Style
+   ======================================== */
+
+.mac-input {
+  width: 100%;
+  padding: 12px 14px;
+  font-family: var(--font-chicago);
+  font-size: 16px;
+  background: var(--mac-white);
+  border: 2px solid var(--mac-black);
+  box-shadow:
+    inset 2px 2px 0 var(--mac-black),
+    inset -2px -2px 0 var(--mac-white);
+  outline: none;
+}
+
+.mac-input:focus {
+  outline: 2px solid var(--mac-black);
+  outline-offset: 1px;
+}
+
+.mac-input::placeholder {
+  color: var(--mac-black);
+  opacity: 0.5;
+}
+
+/* ========================================
+   Mac Label
+   ======================================== */
+
+.mac-label {
+  display: block;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+/* ========================================
+   Drop Zone - Folder Icon Style
+   ======================================== */
+
+.mac-drop-zone {
+  border: 3px dashed var(--mac-black);
+  background: var(--mac-white);
+  padding: 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: none;
+}
+
+.mac-drop-zone:hover,
+.mac-drop-zone.dragging {
+  background: var(--mac-black);
+  color: var(--mac-white);
+}
+
+.mac-drop-zone.has-file {
+  border-style: solid;
+}
+
+/* Pixelated folder icon */
+.mac-folder-icon {
+  width: 64px;
+  height: 52px;
+  margin: 0 auto 16px;
+  background: var(--mac-white);
+  border: 3px solid var(--mac-black);
+  position: relative;
+}
+
+.mac-folder-icon::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: 6px;
+  width: 28px;
+  height: 12px;
+  background: var(--mac-white);
+  border: 3px solid var(--mac-black);
+  border-bottom: none;
+}
+
+.mac-drop-zone:hover .mac-folder-icon,
+.mac-drop-zone.dragging .mac-folder-icon {
+  background: var(--mac-black);
+  border-color: var(--mac-white);
+}
+
+.mac-drop-zone:hover .mac-folder-icon::before,
+.mac-drop-zone.dragging .mac-folder-icon::before {
+  background: var(--mac-black);
+  border-color: var(--mac-white);
+}
+
+/* Document icon for when file is loaded */
+.mac-document-icon {
+  width: 52px;
+  height: 64px;
+  margin: 0 auto 16px;
+  background: var(--mac-white);
+  border: 3px solid var(--mac-black);
+  position: relative;
+}
+
+.mac-document-icon::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  background: var(--mac-white);
+  border-left: 3px solid var(--mac-black);
+  border-bottom: 3px solid var(--mac-black);
+}
+
+.mac-document-icon::after {
+  content: '';
+  position: absolute;
+  top: 24px;
+  left: 8px;
+  right: 8px;
+  height: 3px;
+  background: var(--mac-black);
+  box-shadow: 0 10px 0 var(--mac-black), 0 20px 0 var(--mac-black);
+}
+
+/* ========================================
+   Audio Player - Control Panel Style
+   ======================================== */
+
+.mac-audio-player {
+  background: var(--mac-white);
+  border: 2px solid var(--mac-black);
+  padding: 16px;
+}
+
+.mac-audio-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Play/Pause button */
+.mac-play-button {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mac-white);
+  border: 2px solid var(--mac-black);
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mac-play-button:hover {
+  background: var(--mac-black);
+  color: var(--mac-white);
+}
+
+.mac-play-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Progress bar */
+.mac-progress-container {
+  flex: 1;
+  height: 16px;
+  background: var(--mac-white);
+  border: 2px solid var(--mac-black);
+  box-shadow:
+    inset 2px 2px 0 var(--mac-black),
+    inset -2px -2px 0 var(--mac-white);
+  cursor: pointer;
+  position: relative;
+}
+
+.mac-progress-bar {
+  height: 100%;
+  background: var(--mac-black);
+  transition: none;
+}
+
+/* Time display */
+.mac-time {
+  font-size: 14px;
+  font-family: var(--font-chicago);
+  min-width: 90px;
+  text-align: right;
+}
+
+/* ========================================
+   Results Section
+   ======================================== */
+
+.mac-results {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mac-result-item {
+  background: var(--mac-white);
+  border: 2px solid var(--mac-black);
+  padding: 16px;
+}
+
+.mac-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+.mac-download-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-family: var(--font-chicago);
+  font-size: 14px;
+  background: var(--mac-white);
+  border: 2px solid var(--mac-black);
+  text-decoration: none;
+  color: var(--mac-black);
+  cursor: pointer;
+}
+
+.mac-download-button:hover {
+  background: var(--mac-black);
+  color: var(--mac-white);
+}
+
+/* ========================================
+   Loading State - Watch Cursor Pattern
+   ======================================== */
+
+.mac-loading {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--mac-white);
+  border-radius: 50%;
+  position: relative;
+  animation: mac-clock 1s steps(12) infinite;
+}
+
+.mac-loading::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 6px;
+  background: var(--mac-white);
+  transform-origin: bottom center;
+  transform: translateX(-50%) translateY(-100%);
+}
+
+@keyframes mac-clock {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ========================================
+   Error Message
+   ======================================== */
+
+.mac-error {
+  background: var(--mac-white);
+  border: 2px solid var(--mac-black);
+  padding: 8px 12px;
+  font-size: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.mac-error-icon {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--mac-black);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: bold;
+  font-size: 10px;
+}
+
+/* ========================================
+   Scrollbar - Classic Mac Style
+   ======================================== */
+
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--mac-white);
+  border: 1px solid var(--mac-black);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--mac-white);
+  border: 1px solid var(--mac-black);
+  box-shadow:
+    inset -1px -1px 0 var(--mac-black),
+    inset 1px 1px 0 var(--mac-white);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--mac-black);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--mac-white);
+  border: 1px solid var(--mac-black);
+}
+
+/* ========================================
+   Utility Classes
+   ======================================== */
+
+.mac-divider {
+  height: 2px;
+  background: var(--mac-black);
+  margin: 12px 0;
+}
+
+.mac-text-small {
+  font-size: 10px;
+}
+
+.mac-text-center {
+  text-align: center;
+}
+
+.mac-mt-12 {
+  margin-top: 12px;
+}
+
+.mac-mt-16 {
+  margin-top: 16px;
+}
+
+.mac-mb-8 {
+  margin-bottom: 8px;
+}
+
+.mac-space-y-12>*+* {
+  margin-top: 20px;
+}
+
+/* ========================================
+   Radio Buttons - Classic Mac Style
+   ======================================== */
+
+.mac-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.mac-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.mac-radio {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--mac-black);
+  border-radius: 50%;
+  background: var(--mac-white);
+  cursor: pointer;
+  position: relative;
+}
+
+.mac-radio:checked {
+  background: var(--mac-white);
+}
+
+.mac-radio:checked::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  background: var(--mac-black);
+  border-radius: 50%;
+}
+
+.mac-radio:hover {
+  box-shadow: 0 0 0 2px var(--mac-black);
+}
