@@ -4,6 +4,10 @@
 
 ![ClearAudio](apps/web/public/og-image.png)
 
+<p align="center">
+  <a href="https://clearaudio.app"><strong>Try it live →</strong></a>
+</p>
+
 Upload audio or video, describe what you want to keep ("the speaker", "the voice", "the music"), and we'll clean up the rest. Powered by Meta's SAM-Audio.
 
 ## Project Structure
@@ -89,3 +93,8 @@ bun run dev:engine
 - **Audio Model:** [SAM-Audio](https://github.com/facebookresearch/sam-audio) by Meta
 - **Package Managers:** Bun (frontend), uv (backend)
 
+## License
+
+This project's code is licensed under the [MIT License](LICENSE).
+
+**Note:** This project uses [SAM-Audio](https://github.com/facebookresearch/sam-audio) by Meta, which is licensed under Meta's SAM License. By using this project, you agree to comply with the SAM License terms. See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for details.
