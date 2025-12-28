@@ -592,7 +592,15 @@ export default function Home() {
           paddingTop: "12px",
           borderTop: "1px solid rgba(0,0,0,0.1)"
         }}>
-          Powered by{" "}
+          <a 
+            href="https://github.com/sambarrowclough/clearaudio" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={{ textDecoration: "underline" }}
+          >
+            Open source
+          </a>
+          {" · Powered by "}
           <a 
             href="https://github.com/facebookresearch/sam-audio" 
             target="_blank" 
