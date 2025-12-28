@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { ScrollWrapper } from "@/components/ScrollWrapper";
 
@@ -65,6 +66,7 @@ export default function RootLayout({
         <ScrollWrapper>
           {children}
         </ScrollWrapper>
+        <Analytics />
       </body>
     </html>
   );
