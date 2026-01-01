@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "send-email": "bun run scripts/send-email.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
