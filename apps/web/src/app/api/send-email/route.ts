@@ -18,7 +18,8 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "ClearAudio <noreply@cleanaudio.app>",
+        //from: "ClearAudio <noreply@cleanaudio.app>",
+        from: "onboarding@resend.dev",
         to: email,
         subject: "Sign in to ClearAudio",
         html: `

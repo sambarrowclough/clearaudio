@@ -609,7 +609,15 @@ export default function Home() {
           >
             SAM-Audio
           </a>
-          {" "}from Meta
+          {" from Meta"}
+          <br />
+          <a href="/privacy" style={{ textDecoration: "underline" }}>
+            Privacy
+          </a>
+          {" · "}
+          <a href="/terms" style={{ textDecoration: "underline" }}>
+            Terms
+          </a>
         </div>
       </div>
     </div>
