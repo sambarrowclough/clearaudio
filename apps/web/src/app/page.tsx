@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
 import { AudioPlayer } from "@/components/AudioPlayer";
+import { authClient } from "@/lib/auth-client";
+import { PLANS, type PlanType } from "@/lib/stripe";
 import * as Switch from "@radix-ui/react-switch";
 import * as Slider from "@radix-ui/react-slider";
 import * as Collapsible from "@radix-ui/react-collapsible";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Lock } from "lucide-react";
 import {
   IconFast,
   IconBalanced,
@@ -22,39 +25,54 @@ interface ProcessingResult {
   sample_rate: number;
 }
 
+interface UsageData {
+  plan: PlanType;
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
 const MODEL_OPTIONS: {
   id: ModelSize;
   name: string;
   description: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
+  requiresPro: boolean;
 }[] = [
   {
     id: "small",
     name: "Small",
     description: "Quick processing",
     icon: IconFast,
+    requiresPro: false,
   },
   {
     id: "base",
     name: "Base",
     description: "Speed & quality",
     icon: IconBalanced,
+    requiresPro: false,
   },
   {
     id: "large",
     name: "Large",
     description: "Best quality",
     icon: IconQuality,
+    requiresPro: true,
   },
   {
     id: "large-tv",
     name: "Large-TV",
     description: "For video files",
     icon: IconVideo,
+    requiresPro: true,
   },
 ];
 
 export default function Home() {
+  const router = useRouter();
+  const { data: session } = authClient.useSession();
+
   const [file, setFile] = useState<File | null>(null);
   const [description, setDescription] = useState("");
   const [modelSize, setModelSize] = useState<ModelSize>("small");
@@ -67,9 +85,34 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
+  const [usage, setUsage] = useState<UsageData | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
+
+  const isPro = usage?.plan === "pro";
+
+  // Fetch usage on mount and when session changes
+  useEffect(() => {
+    if (session?.user) {
+      fetchUsage();
+    } else {
+      setUsage(null);
+    }
+  }, [session?.user]);
+
+  const fetchUsage = async () => {
+    try {
+      const response = await fetch("/api/usage");
+      if (response.ok) {
+        const data = await response.json();
+        setUsage(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch usage:", error);
+    }
+  };
 
   const handleDownload = async (url: string, filename: string) => {
     try {
@@ -124,6 +167,39 @@ export default function Home() {
   const handleProcess = async () => {
     if (!file || !description.trim()) return;
 
+    // Check if user is signed in
+    if (!session?.user) {
+      router.push("/sign-in?redirect=/");
+      return;
+    }
+
+    // Check usage limit
+    if (usage && usage.remaining <= 0) {
+      setShowUpgradeModal(true);
+      return;
+    }
+
+    // Check file size limit
+    const fileSizeMb = file.size / 1024 / 1024;
+    const maxSize = isPro ? PLANS.pro.maxFileSizeMb : PLANS.free.maxFileSizeMb;
+    if (fileSizeMb > maxSize) {
+      setError(`File size (${fileSizeMb.toFixed(1)}MB) exceeds your plan limit of ${maxSize}MB.${!isPro ? " Upgrade to Pro for larger files." : ""}`);
+      return;
+    }
+
+    // Check model access
+    const selectedModel = MODEL_OPTIONS.find((m) => m.id === modelSize);
+    if (selectedModel?.requiresPro && !isPro) {
+      setError(`${selectedModel.name} model requires Pro plan.`);
+      return;
+    }
+
+    // Check high quality access
+    if (highQuality && !isPro) {
+      setError("High quality mode requires Pro plan.");
+      return;
+    }
+
     setIsProcessing(true);
     setError(null);
     setResult(null);
@@ -159,10 +235,33 @@ export default function Home() {
 
       const data: ProcessingResult = await response.json();
       setResult(data);
+
+      // Record the generation
+      await fetch("/api/generation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          modelSize,
+          highQuality,
+          fileSizeBytes: file.size,
+        }),
+      });
+
+      // Refresh usage count
+      fetchUsage();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleModelSelect = (model: (typeof MODEL_OPTIONS)[0]) => {
+    if (model.requiresPro && !isPro) {
+      // Still allow selection but show indicator
+      setModelSize(model.id);
+    } else {
+      setModelSize(model.id);
     }
   };
 
@@ -177,6 +276,86 @@ export default function Home() {
 
       {/* Content */}
       <div className="mac-content mac-space-y-12">
+        {/* Header with Auth/Usage */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "8px",
+          }}
+        >
+          {session?.user ? (
+            <>
+              {/* Usage indicator */}
+              {usage && (
+                <div style={{ fontSize: "12px" }}>
+                  <span style={{ opacity: 0.6 }}>
+                    {usage.used}/{usage.limit} cleanings
+                  </span>
+                  {isPro && (
+                    <span
+                      style={{
+                        marginLeft: "8px",
+                        background: "var(--mac-black)",
+                        color: "var(--mac-white)",
+                        padding: "2px 6px",
+                        fontSize: "10px",
+                      }}
+                    >
+                      PRO
+                    </span>
+                  )}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: "8px" }}>
+                {!isPro && (
+                  <button
+                    onClick={() => router.push("/pricing")}
+                    style={{
+                      background: "var(--mac-black)",
+                      color: "var(--mac-white)",
+                      border: "none",
+                      padding: "4px 10px",
+                      fontSize: "11px",
+                      fontFamily: "var(--font-chicago)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Upgrade
+                  </button>
+                )}
+                <button
+                  onClick={() => router.push("/account")}
+                  style={{
+                    background: "none",
+                    border: "1px solid var(--mac-black)",
+                    padding: "4px 10px",
+                    fontSize: "11px",
+                    fontFamily: "var(--font-chicago)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Account
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: "12px", opacity: 0.6 }}>
+                Sign in to clean audio
+              </div>
+              <button
+                onClick={() => router.push("/sign-in")}
+                className="mac-button"
+                style={{ padding: "4px 12px", fontSize: "12px" }}
+              >
+                Sign In
+              </button>
+            </>
+          )}
+        </div>
+
         {/* Drop Zone */}
         <div
           className={`mac-drop-zone ${isDragging ? "dragging" : ""} ${file ? "has-file" : ""}`}
@@ -250,12 +429,14 @@ export default function Home() {
         {/* Demo Example */}
         {showDemo && !file && !result && (
           <div className="mac-results">
-            <div style={{ 
-              textAlign: "center", 
-              marginBottom: "16px",
-              fontSize: "14px",
-              fontWeight: "bold",
-            }}>
+            <div
+              style={{
+                textAlign: "center",
+                marginBottom: "16px",
+                fontSize: "14px",
+                fontWeight: "bold",
+              }}
+            >
               Example: Isolating speech from background noise
             </div>
 
@@ -312,11 +493,12 @@ export default function Home() {
             {MODEL_OPTIONS.map((model) => {
               const IconComponent = model.icon;
               const isSelected = modelSize === model.id;
+              const isLocked = model.requiresPro && !isPro;
               return (
                 <button
                   key={model.id}
                   type="button"
-                  onClick={() => setModelSize(model.id)}
+                  onClick={() => handleModelSelect(model)}
                   style={{
                     display: "flex",
                     flexDirection: "column",
@@ -324,19 +506,54 @@ export default function Home() {
                     padding: "16px 12px",
                     fontFamily: "var(--font-chicago)",
                     border: "2px solid var(--mac-black)",
-                    background: isSelected ? "var(--mac-black)" : "var(--mac-white)",
+                    background: isSelected
+                      ? "var(--mac-black)"
+                      : "var(--mac-white)",
                     color: isSelected ? "var(--mac-white)" : "var(--mac-black)",
                     cursor: "pointer",
-                    boxShadow: isSelected 
-                      ? "inset 2px 2px 0 #666, inset -2px -2px 0 #333" 
+                    boxShadow: isSelected
+                      ? "inset 2px 2px 0 #666, inset -2px -2px 0 #333"
                       : "inset -2px -2px 0 var(--mac-black), inset 2px 2px 0 var(--mac-white)",
+                    opacity: isLocked ? 0.6 : 1,
+                    position: "relative",
                   }}
                 >
+                  {isLocked && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "4px",
+                        right: "4px",
+                        background: isSelected
+                          ? "var(--mac-white)"
+                          : "var(--mac-black)",
+                        color: isSelected
+                          ? "var(--mac-black)"
+                          : "var(--mac-white)",
+                        padding: "2px 4px",
+                        fontSize: "8px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "2px",
+                      }}
+                    >
+                      <Lock size={8} />
+                      PRO
+                    </div>
+                  )}
                   <IconComponent size={28} />
-                  <span style={{ fontWeight: "bold", fontSize: "14px", marginTop: "8px" }}>
+                  <span
+                    style={{
+                      fontWeight: "bold",
+                      fontSize: "14px",
+                      marginTop: "8px",
+                    }}
+                  >
                     {model.name}
                   </span>
-                  <span style={{ fontSize: "11px", opacity: 0.7, marginTop: "2px" }}>
+                  <span
+                    style={{ fontSize: "11px", opacity: 0.7, marginTop: "2px" }}
+                  >
                     {model.description}
                   </span>
                 </button>
@@ -361,12 +578,13 @@ export default function Home() {
                 background: "var(--mac-white)",
                 border: "2px solid var(--mac-black)",
                 cursor: "pointer",
-                boxShadow: "inset -2px -2px 0 var(--mac-black), inset 2px 2px 0 var(--mac-white)",
+                boxShadow:
+                  "inset -2px -2px 0 var(--mac-black), inset 2px 2px 0 var(--mac-white)",
               }}
             >
               <span>Advanced Options</span>
-              <ChevronDown 
-                size={18} 
+              <ChevronDown
+                size={18}
                 strokeWidth={2}
                 style={{
                   transform: advancedOpen ? "rotate(180deg)" : "rotate(0deg)",
@@ -375,36 +593,62 @@ export default function Home() {
               />
             </button>
           </Collapsible.Trigger>
-          
+
           <Collapsible.Content>
-            <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div
+              style={{
+                marginTop: "12px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+              }}
+            >
               {/* High Quality Toggle */}
-              <div 
-                style={{ 
-                  display: "flex", 
-                  alignItems: "center", 
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
                   justifyContent: "space-between",
                   padding: "12px",
                   border: "2px solid var(--mac-black)",
                   background: "var(--mac-white)",
+                  opacity: !isPro ? 0.6 : 1,
                 }}
               >
                 <div>
-                  <div style={{ fontSize: "14px", fontWeight: "bold" }}>High Quality Mode</div>
-                  <div style={{ fontSize: "11px", opacity: 0.7, marginTop: "2px" }}>
-                    Slower, but better separation
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "bold",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    High Quality Mode
+                    {!isPro && <Lock size={12} />}
+                  </div>
+                  <div
+                    style={{ fontSize: "11px", opacity: 0.7, marginTop: "2px" }}
+                  >
+                    {isPro
+                      ? "Slower, but better separation"
+                      : "Requires Pro plan"}
                   </div>
                 </div>
                 <Switch.Root
                   checked={highQuality}
                   onCheckedChange={setHighQuality}
+                  disabled={!isPro}
                   style={{
                     width: "42px",
                     height: "24px",
-                    background: highQuality ? "var(--mac-black)" : "var(--mac-white)",
+                    background: highQuality
+                      ? "var(--mac-black)"
+                      : "var(--mac-white)",
                     border: "2px solid var(--mac-black)",
                     padding: 0,
-                    cursor: "pointer",
+                    cursor: isPro ? "pointer" : "not-allowed",
                     position: "relative",
                     boxShadow: "inset 2px 2px 0 rgba(0,0,0,0.1)",
                   }}
@@ -414,9 +658,13 @@ export default function Home() {
                       display: "block",
                       width: "16px",
                       height: "16px",
-                      background: highQuality ? "var(--mac-white)" : "var(--mac-black)",
+                      background: highQuality
+                        ? "var(--mac-white)"
+                        : "var(--mac-black)",
                       border: "2px solid var(--mac-black)",
-                      transform: highQuality ? "translateX(20px)" : "translateX(2px)",
+                      transform: highQuality
+                        ? "translateX(20px)"
+                        : "translateX(2px)",
                       transition: "transform 100ms",
                     }}
                   />
@@ -424,23 +672,38 @@ export default function Home() {
               </div>
 
               {/* Reranking Candidates Slider */}
-              <div 
-                style={{ 
+              <div
+                style={{
                   padding: "12px",
                   border: "2px solid var(--mac-black)",
                   background: "var(--mac-white)",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "12px",
+                  }}
+                >
                   <div>
-                    <div style={{ fontSize: "14px", fontWeight: "bold" }}>Candidates</div>
-                    <div style={{ fontSize: "11px", opacity: 0.7, marginTop: "2px" }}>
+                    <div style={{ fontSize: "14px", fontWeight: "bold" }}>
+                      Candidates
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        opacity: 0.7,
+                        marginTop: "2px",
+                      }}
+                    >
                       More = better quality, slower
                     </div>
                   </div>
-                  <div 
-                    style={{ 
-                      fontSize: "18px", 
+                  <div
+                    style={{
+                      fontSize: "18px",
                       fontWeight: "bold",
                       background: "var(--mac-black)",
                       color: "var(--mac-white)",
@@ -471,7 +734,8 @@ export default function Home() {
                     style={{
                       background: "var(--mac-white)",
                       border: "2px solid var(--mac-black)",
-                      boxShadow: "inset 2px 2px 0 var(--mac-black), inset -2px -2px 0 var(--mac-white)",
+                      boxShadow:
+                        "inset 2px 2px 0 var(--mac-black), inset -2px -2px 0 var(--mac-white)",
                       position: "relative",
                       flexGrow: 1,
                       height: "12px",
@@ -492,12 +756,21 @@ export default function Home() {
                       height: "24px",
                       background: "var(--mac-white)",
                       border: "2px solid var(--mac-black)",
-                      boxShadow: "inset -2px -2px 0 var(--mac-black), inset 2px 2px 0 var(--mac-white)",
+                      boxShadow:
+                        "inset -2px -2px 0 var(--mac-black), inset 2px 2px 0 var(--mac-white)",
                       cursor: "grab",
                     }}
                   />
                 </Slider.Root>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", fontSize: "10px", opacity: 0.5 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginTop: "4px",
+                    fontSize: "10px",
+                    opacity: 0.5,
+                  }}
+                >
                   <span>2</span>
                   <span>32</span>
                 </div>
@@ -514,7 +787,9 @@ export default function Home() {
             className="mac-button mac-button-primary"
           >
             {isProcessing ? (
-              <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span
+                style={{ display: "flex", alignItems: "center", gap: "8px" }}
+              >
                 <span className="mac-loading" />
                 Processing...
               </span>
@@ -543,7 +818,12 @@ export default function Home() {
                 <div className="mac-result-header">
                   <span style={{ fontWeight: "bold" }}>Original Audio</span>
                   <button
-                    onClick={() => handleDownload(originalUrl, `original.${file?.name.split('.').pop() || 'wav'}`)}
+                    onClick={() =>
+                      handleDownload(
+                        originalUrl,
+                        `original.${file?.name.split(".").pop() || "wav"}`
+                      )
+                    }
                     className="mac-download-button"
                   >
                     Download
@@ -572,7 +852,9 @@ export default function Home() {
               <div className="mac-result-header">
                 <span style={{ fontWeight: "bold" }}>Removed Sounds</span>
                 <button
-                  onClick={() => handleDownload(result.residual_url, "removed.wav")}
+                  onClick={() =>
+                    handleDownload(result.residual_url, "removed.wav")
+                  }
                   className="mac-download-button"
                 >
                   Download
@@ -584,26 +866,28 @@ export default function Home() {
         )}
 
         {/* Attribution Footer */}
-        <div style={{ 
-          textAlign: "center", 
-          fontSize: "11px", 
-          opacity: 0.6, 
-          marginTop: "24px",
-          paddingTop: "12px",
-          borderTop: "1px solid rgba(0,0,0,0.1)"
-        }}>
-          <a 
-            href="https://github.com/sambarrowclough/clearaudio" 
-            target="_blank" 
+        <div
+          style={{
+            textAlign: "center",
+            fontSize: "11px",
+            opacity: 0.6,
+            marginTop: "24px",
+            paddingTop: "12px",
+            borderTop: "1px solid rgba(0,0,0,0.1)",
+          }}
+        >
+          <a
+            href="https://github.com/sambarrowclough/clearaudio"
+            target="_blank"
             rel="noopener noreferrer"
             style={{ textDecoration: "underline" }}
           >
             Open source
           </a>
           {" · Powered by "}
-          <a 
-            href="https://github.com/facebookresearch/sam-audio" 
-            target="_blank" 
+          <a
+            href="https://github.com/facebookresearch/sam-audio"
+            target="_blank"
             rel="noopener noreferrer"
             style={{ textDecoration: "underline" }}
           >
@@ -618,8 +902,79 @@ export default function Home() {
           <a href="/terms" style={{ textDecoration: "underline" }}>
             Terms
           </a>
+          {" · "}
+          <a href="/pricing" style={{ textDecoration: "underline" }}>
+            Pricing
+          </a>
         </div>
       </div>
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setShowUpgradeModal(false)}
+        >
+          <div
+            style={{
+              background: "var(--mac-white)",
+              border: "3px solid var(--mac-black)",
+              boxShadow: "6px 6px 0 var(--mac-black)",
+              padding: "24px",
+              maxWidth: "400px",
+              textAlign: "center",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                fontSize: "48px",
+                marginBottom: "16px",
+              }}
+            >
+              !
+            </div>
+            <h2 style={{ fontSize: "18px", marginBottom: "12px" }}>
+              You&apos;ve used all your free cleanings
+            </h2>
+            <p
+              style={{ fontSize: "13px", opacity: 0.7, marginBottom: "20px" }}
+            >
+              Upgrade to Pro for {PLANS.pro.generationsPerMonth} cleanings per
+              month, all models, and high-quality mode.
+            </p>
+            <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+              <button
+                onClick={() => setShowUpgradeModal(false)}
+                className="mac-button"
+              >
+                Maybe Later
+              </button>
+              <button
+                onClick={() => router.push("/pricing")}
+                className="mac-button"
+                style={{
+                  background: "var(--mac-black)",
+                  color: "var(--mac-white)",
+                }}
+              >
+                Upgrade to Pro
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
