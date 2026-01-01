@@ -30,6 +30,9 @@ clearaudio/
 - [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/en/quick-start#authentication) — installed and authenticated
 - [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) — for file uploads and storage
 - [SAM-Audio model access](https://huggingface.co/facebook/sam-audio-large) — request access to the checkpoints (required)
+- [Neon Database](https://neon.tech/) — PostgreSQL database for auth
+- [Google Cloud Console](https://console.cloud.google.com/) — for Google OAuth (optional)
+- [Resend](https://resend.com/) — for sending magic link emails
 
 ## Getting Started
 
@@ -59,10 +62,22 @@ cp apps/engine/.env.example apps/engine/.env
 ```
 
 You'll need:
+
+**Web App (`apps/web/.env.local`):**
+- **BLOB_READ_WRITE_TOKEN** — Get this from your [Vercel Blob storage settings](https://vercel.com/docs/storage/vercel-blob)
+- **NEXT_PUBLIC_API_URL** — URL of your backend (default: `http://localhost:8000`)
+- **DATABASE_URL** — PostgreSQL connection string from [Neon](https://neon.tech/)
+- **BETTER_AUTH_SECRET** — A random secret for Better Auth sessions (generate with `openssl rand -base64 32`)
+- **BETTER_AUTH_URL** — Base URL for auth callbacks (default: `http://localhost:3000`)
+- **GOOGLE_CLIENT_ID** — OAuth client ID from [Google Cloud Console](https://console.cloud.google.com/apis/credentials) (optional)
+- **GOOGLE_CLIENT_SECRET** — OAuth client secret from Google Cloud Console (optional)
+- **RESEND_API_KEY** — API key from [Resend](https://resend.com/) for magic link emails
+
+**Engine (`apps/engine/.env`):**
 - **BLOB_READ_WRITE_TOKEN** — Get this from your [Vercel Blob storage settings](https://vercel.com/docs/storage/vercel-blob)
 - **MODAL_TOKEN_ID** / **MODAL_TOKEN_SECRET** — Get from [Modal settings](https://modal.com/settings)
-- **NEXT_PUBLIC_API_URL** — URL of your backend (default: `http://localhost:8000`)
 - **ALLOWED_ORIGINS** — CORS origins for the engine (default: `http://localhost:3000`)
+- **HF_TOKEN** — Hugging Face token (configured as Modal secret, see below)
 
 ### Set Up Modal Secret for Hugging Face
 

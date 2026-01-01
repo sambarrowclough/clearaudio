@@ -46,3 +46,4 @@ htmlcov/
 # Misc
 *.pem
 .vercel
+.env*.local
