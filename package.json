@@ -10,7 +10,7 @@
     "dev:web": "bun run --filter web dev",
     "dev:engine": "cd apps/engine && PYTHONPATH=src uv run uvicorn engine.main:app --reload --port 8000",
     "build": "bun run --filter '*' build",
-    "build:web": "bun run --filter web build"
+    "build:web": "bun run --filter web build",
+    "deploy:engine": "cd apps/engine && PYTHONPATH=src uv run modal deploy src/engine/modal_app.py"
   }
 }
-

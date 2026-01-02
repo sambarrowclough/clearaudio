@@ -127,6 +127,7 @@ class AudioSeparator:
         description: str,
         high_quality: bool = False,
         reranking_candidates: int = 8,
+        source_url: str = "",
     ) -> dict:
         """
         Separate audio using SAM Audio with text prompting.
@@ -136,38 +137,47 @@ class AudioSeparator:
             description: Text description of sound to isolate
             high_quality: Use span prediction and re-ranking (slower but better)
             reranking_candidates: Number of candidates for re-ranking (default 8, higher = better but slower)
+            source_url: Optional URL where the audio was downloaded from (for logging)
             
         Returns:
             Dictionary with 'target' and 'residual' audio bytes (WAV format)
         """
         import os
         import tempfile
+        import time
         
         import torch
         import torchaudio
+        
+        total_start = time.perf_counter()
         
         # Save input bytes to temp file (SAM Audio expects file path)
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             f.write(audio_bytes)
             temp_input_path = f.name
         
-        print(f"Processing audio with prompt: '{description}'")
+        # Load and analyze input audio
+        try:
+            waveform, sr = torchaudio.load(temp_input_path)
+            input_duration = waveform.shape[1] / sr
+        except Exception:
+            input_duration = None
         
-        import time
+        # Log input
+        print(f"\n[INPUT] {source_url if source_url else f'{len(audio_bytes):,} bytes'}")
+        if input_duration:
+            print(f"        {input_duration:.1f}s @ {sr}Hz")
+        print(f"[PROMPT] \"{description}\"")
+        print(f"[PARAMS] high_quality={high_quality}, reranking_candidates={reranking_candidates}")
         
         # Process
-        preprocess_start = time.perf_counter()
         inputs = self.processor(
             audios=[temp_input_path],
             descriptions=[description],
         ).to(self.device)
-        preprocess_time = time.perf_counter() - preprocess_start
-        print(f"Preprocessing took {preprocess_time:.2f}s")
         
-        inference_start = time.perf_counter()
         with torch.inference_mode():
             if high_quality:
-                print(f"Using high quality mode (predict_spans + {reranking_candidates} reranking candidates)")
                 result = self.model.separate(
                     inputs,
                     predict_spans=True,
@@ -176,10 +186,7 @@ class AudioSeparator:
             else:
                 result = self.model.separate(inputs)
         
-        # Sync CUDA to get accurate timing
         torch.cuda.synchronize()
-        inference_time = time.perf_counter() - inference_start
-        print(f"Inference took {inference_time:.2f}s")
         
         sample_rate = self.processor.audio_sampling_rate
         
@@ -207,12 +214,25 @@ class AudioSeparator:
         target_bytes = tensor_to_wav_bytes(target_tensor, sample_rate)
         residual_bytes = tensor_to_wav_bytes(residual_tensor, sample_rate)
         
-        print(f"Done! Target: {len(target_bytes)} bytes, Residual: {len(residual_bytes)} bytes")
+        # Calculate output duration
+        target_duration = target_tensor.shape[-1] / sample_rate
+        
+        total_time = time.perf_counter() - total_start
+        
+        # Clean up temp file
+        os.unlink(temp_input_path)
+        
+        # Log output
+        print(f"[OUTPUT] {target_duration:.1f}s @ {sample_rate}Hz ({len(target_bytes) / 1024:.0f} KB)")
+        print(f"[TIME] {total_time:.1f}s")
         
         return {
             "target": target_bytes,
             "residual": residual_bytes,
             "sample_rate": sample_rate,
+            "input_duration": input_duration,
+            "output_duration": target_duration,
+            "processing_time": total_time,
         }
 
 
