@@ -9,7 +9,7 @@ import { PLANS, type PlanType } from "@/lib/stripe";
 import * as Switch from "@radix-ui/react-switch";
 import * as Slider from "@radix-ui/react-slider";
 import * as Collapsible from "@radix-ui/react-collapsible";
-import { ChevronDown, Lock } from "lucide-react";
+import { ChevronDown, Lock, Github } from "lucide-react";
 import {
   IconFast,
   IconBalanced,
@@ -308,7 +308,25 @@ export default function Home() {
                   )}
                 </div>
               )}
-              <div style={{ display: "flex", gap: "8px" }}>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <a
+                  href="https://github.com/sambarrowclough/clearaudio"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "28px",
+                    height: "28px",
+                    border: "1px solid var(--mac-black)",
+                    background: "none",
+                    cursor: "pointer",
+                  }}
+                  title="View on GitHub"
+                >
+                  <Github size={16} strokeWidth={2} />
+                </a>
                 {!isPro && (
                   <button
                     onClick={() => router.push("/pricing")}
@@ -345,13 +363,33 @@ export default function Home() {
               <div style={{ fontSize: "12px", opacity: 0.6 }}>
                 Sign in to clean audio
               </div>
-              <button
-                onClick={() => router.push("/sign-in")}
-                className="mac-button"
-                style={{ padding: "4px 12px", fontSize: "12px" }}
-              >
-                Sign In
-              </button>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <a
+                  href="https://github.com/sambarrowclough/clearaudio"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "28px",
+                    height: "28px",
+                    border: "1px solid var(--mac-black)",
+                    background: "none",
+                    cursor: "pointer",
+                  }}
+                  title="View on GitHub"
+                >
+                  <Github size={16} strokeWidth={2} />
+                </a>
+                <button
+                  onClick={() => router.push("/sign-in")}
+                  className="mac-button"
+                  style={{ padding: "4px 12px", fontSize: "12px" }}
+                >
+                  Sign In
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -865,47 +903,80 @@ export default function Home() {
           </div>
         )}
 
-        {/* Attribution Footer */}
+        {/* Footer */}
         <div
           style={{
-            textAlign: "center",
-            fontSize: "11px",
-            opacity: 0.6,
             marginTop: "24px",
             paddingTop: "12px",
             borderTop: "1px solid rgba(0,0,0,0.1)",
           }}
         >
-          <a
-            href="https://github.com/sambarrowclough/clearaudio"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ textDecoration: "underline" }}
+          {/* Legal Links */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: "16px",
+              fontSize: "11px",
+            }}
           >
-            Open source
-          </a>
-          {" · Powered by "}
-          <a
-            href="https://github.com/facebookresearch/sam-audio"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ textDecoration: "underline" }}
+            <a
+              href="/pricing"
+              style={{
+                opacity: 0.5,
+                textDecoration: "none",
+                transition: "opacity 150ms",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.5")}
+            >
+              Pricing
+            </a>
+            <a
+              href="/terms"
+              style={{
+                opacity: 0.5,
+                textDecoration: "none",
+                transition: "opacity 150ms",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.5")}
+            >
+              Terms
+            </a>
+            <a
+              href="/privacy"
+              style={{
+                opacity: 0.5,
+                textDecoration: "none",
+                transition: "opacity 150ms",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.5")}
+            >
+              Privacy
+            </a>
+          </div>
+
+          {/* Attribution */}
+          <div
+            style={{
+              textAlign: "center",
+              fontSize: "10px",
+              opacity: 0.4,
+              marginTop: "10px",
+            }}
           >
-            SAM-Audio
-          </a>
-          {" from Meta"}
-          <br />
-          <a href="/privacy" style={{ textDecoration: "underline" }}>
-            Privacy
-          </a>
-          {" · "}
-          <a href="/terms" style={{ textDecoration: "underline" }}>
-            Terms
-          </a>
-          {" · "}
-          <a href="/pricing" style={{ textDecoration: "underline" }}>
-            Pricing
-          </a>
+            Powered by{" "}
+            <a
+              href="https://github.com/facebookresearch/sam-audio"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "underline" }}
+            >
+              SAM-Audio
+            </a>
+          </div>
         </div>
       </div>
 
