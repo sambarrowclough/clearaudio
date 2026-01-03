@@ -66,7 +66,7 @@ def download_model(model_size: str = "large"):
     enable_memory_snapshot=True,  # CPU memory snapshots for faster cold starts
 )
 class AudioSeparator:
-    """SAM Audio model class with cached model loading."""
+    """SAM Audio model class with cached model loading and GPU memory snapshots."""
     
     model_size: str = modal.parameter(default="large")
     

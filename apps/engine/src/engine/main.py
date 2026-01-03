@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("cleanaudio")
+logger = logging.getLogger("clearaudio")
 
 app = FastAPI(
     title="ClearAudio Engine",
