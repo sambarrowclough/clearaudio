@@ -1,5 +1,6 @@
 """Main FastAPI application for ClearAudio."""
 
+import logging
 import os
 from typing import Literal
 
@@ -10,6 +11,10 @@ import httpx
 import vercel_blob
 from fastapi import FastAPI, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("cleanaudio")
 
 app = FastAPI(
     title="ClearAudio Engine",
@@ -93,6 +98,7 @@ async def separate_audio(
             description=description,
             high_quality=high_quality,
             reranking_candidates=reranking_candidates,
+            source_url=audio_url,
         )
         
         # Upload processed audio to Vercel Blob
@@ -107,10 +113,20 @@ async def separate_audio(
             {"access": "public", "contentType": "audio/wav", "addRandomSuffix": True}
         )
         
+        target_url = target_resp["url"]
+        residual_url = residual_resp["url"]
+        
+        # Log the complete request summary
+        logger.info(f"[INPUT]  {audio_url}")
+        logger.info(f"[PROMPT] \"{description}\"")
+        logger.info(f"[PARAMS] model={model_size}, high_quality={high_quality}, candidates={reranking_candidates}")
+        logger.info(f"[OUTPUT] {target_url}")
+        logger.info(f"[TIME]   {result.get('processing_time', 0):.1f}s")
+        
         # Return URLs to blob storage
         return {
-            "target_url": target_resp["url"],
-            "residual_url": residual_resp["url"],
+            "target_url": target_url,
+            "residual_url": residual_url,
             "sample_rate": result["sample_rate"],
         }
         
