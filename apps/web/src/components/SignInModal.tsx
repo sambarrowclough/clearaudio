@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { authClient } from "@/lib/auth-client";
-import { X } from "lucide-react";
 
 interface SignInModalProps {
   open: boolean;
@@ -20,6 +19,18 @@ export function SignInModal({ open, onOpenChange, onSuccess }: SignInModalProps)
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const otpInputRef = useRef<HTMLInputElement>(null);
+  
+  // Refs for OAuth popup cleanup
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasSucceededRef = useRef(false);
+
+  // Cleanup function for OAuth polling
+  const cleanupOAuthPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
 
   // Reset state when modal closes
   useEffect(() => {
@@ -29,8 +40,17 @@ export function SignInModal({ open, onOpenChange, onSuccess }: SignInModalProps)
       setOtp("");
       setError(null);
       setIsLoading(false);
+      cleanupOAuthPolling();
+      hasSucceededRef.current = false;
     }
-  }, [open]);
+  }, [open, cleanupOAuthPolling]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupOAuthPolling();
+    };
+  }, [cleanupOAuthPolling]);
 
   // Focus OTP input when step changes
   useEffect(() => {
@@ -43,6 +63,13 @@ export function SignInModal({ open, onOpenChange, onSuccess }: SignInModalProps)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "oauth-callback-success") {
+        // Prevent duplicate success calls
+        if (hasSucceededRef.current) return;
+        hasSucceededRef.current = true;
+        
+        // Clean up the poll timer immediately
+        cleanupOAuthPolling();
+        
         onOpenChange(false);
         onSuccess();
       }
@@ -50,11 +77,12 @@ export function SignInModal({ open, onOpenChange, onSuccess }: SignInModalProps)
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [onOpenChange, onSuccess]);
+  }, [onOpenChange, onSuccess, cleanupOAuthPolling]);
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setError(null);
+    hasSucceededRef.current = false;
     
     try {
       // Calculate popup position (centered)
@@ -74,15 +102,25 @@ export function SignInModal({ open, onOpenChange, onSuccess }: SignInModalProps)
         throw new Error("Popup blocked. Please allow popups for this site.");
       }
 
+      // Clean up any existing timer before starting a new one
+      cleanupOAuthPolling();
+
       // Poll to check if popup closed
-      const pollTimer = setInterval(async () => {
+      pollTimerRef.current = setInterval(async () => {
         if (popup.closed) {
-          clearInterval(pollTimer);
+          cleanupOAuthPolling();
+          
+          // Skip if already succeeded via postMessage
+          if (hasSucceededRef.current) return;
           
           // After popup closes, fetch the session to check if user is now signed in
           try {
             const { data: session } = await authClient.getSession();
             if (session?.user) {
+              // Prevent duplicate success calls
+              if (hasSucceededRef.current) return;
+              hasSucceededRef.current = true;
+              
               // User successfully signed in
               onOpenChange(false);
               onSuccess();

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { db } from "@/lib/db";
 import { subscription } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -36,7 +36,7 @@ export async function POST() {
     const headersList = await headers();
     const origin = headersList.get("origin") || process.env.BETTER_AUTH_URL;
 
-    const portalSession = await stripe.billingPortal.sessions.create({
+    const portalSession = await getStripe().billingPortal.sessions.create({
       customer: sub[0].stripeCustomerId,
       return_url: `${origin}/account`,
     });

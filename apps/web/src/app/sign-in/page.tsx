@@ -70,7 +70,7 @@ export default function SignInPage() {
     setError(null);
 
     try {
-      const result = await authClient.emailOtp.verifyEmail({
+      const result = await authClient.signIn.emailOtp({
         email,
         otp,
       });

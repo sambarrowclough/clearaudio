@@ -87,6 +87,7 @@ export default function Home() {
   const [isDragging, setIsDragging] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
   const [usage, setUsage] = useState<UsageData | null>(null);
+  const [isUsageLoading, setIsUsageLoading] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showSignInModal, setShowSignInModal] = useState(false);
 
@@ -106,6 +107,7 @@ export default function Home() {
   }, [session?.user]);
 
   const fetchUsage = async () => {
+    setIsUsageLoading(true);
     try {
       const response = await fetch("/api/usage");
       if (response.ok) {
@@ -114,6 +116,8 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Failed to fetch usage:", error);
+    } finally {
+      setIsUsageLoading(false);
     }
   };
 
@@ -219,38 +223,43 @@ export default function Home() {
   const doProcess = async () => {
     if (!file || !description.trim()) return;
 
-    // Check usage limit
-    if (usage && usage.remaining <= 0) {
-      setShowUpgradeModal(true);
-      return;
-    }
-
-    // Check file size limit
-    const fileSizeMb = file.size / 1024 / 1024;
-    const maxSize = isPro ? PLANS.pro.maxFileSizeMb : PLANS.free.maxFileSizeMb;
-    if (fileSizeMb > maxSize) {
-      setError(`File size (${fileSizeMb.toFixed(1)}MB) exceeds your plan limit of ${maxSize}MB.${!isPro ? " Upgrade to Pro for larger files." : ""}`);
-      return;
-    }
-
-    // Check model access
-    const selectedModel = MODEL_OPTIONS.find((m) => m.id === modelSize);
-    if (selectedModel?.requiresPro && !isPro) {
-      setError(`${selectedModel.name} model requires Pro plan.`);
-      return;
-    }
-
-    // Check high quality access
-    if (highQuality && !isPro) {
-      setError("High quality mode requires Pro plan.");
-      return;
-    }
-
     setIsProcessing(true);
     setError(null);
     setResult(null);
 
     try {
+      // Server-side authorization check BEFORE expensive GPU processing
+      // This prevents bypassing usage limits with stale client-side data
+      const authResponse = await fetch("/api/generation/authorize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          modelSize,
+          highQuality,
+          fileSizeBytes: file.size,
+        }),
+      });
+
+      if (!authResponse.ok) {
+        const authError = await authResponse.json().catch(() => ({ error: "Authorization failed" }));
+        
+        if (authError.code === "USAGE_LIMIT_EXCEEDED") {
+          // Update local usage state with server values and show upgrade modal
+          fetchUsage();
+          setShowUpgradeModal(true);
+          return;
+        }
+        
+        // Feature access denied or other error
+        throw new Error(authError.error || "Authorization failed");
+      }
+
+      // Authorization passed - update local usage with fresh server data
+      const authData = await authResponse.json();
+      if (authData.usage) {
+        // Optionally sync local state (fetchUsage will do this properly)
+      }
+
       // Upload file directly to Vercel Blob (bypasses 4.5MB limit)
       const blob = await upload(file.name, file, {
         access: "public",
@@ -301,10 +310,23 @@ export default function Home() {
         // Redirect to the share page
         router.push(`/g/${shareId}`);
       } else {
-        // If generation recording fails, still show results locally
+        // Parse error response and handle accordingly
+        const errorData = await genResponse.json().catch(() => ({ error: "Unknown error" }));
+        
+        if (genResponse.status === 403) {
+          // Usage limit exceeded (race condition) or feature access denied
+          console.error("Generation recording failed - access denied:", errorData.error);
+          setError(`Unable to save: ${errorData.error || "Usage limit exceeded"}. Your audio is available below but won't be saved to your account.`);
+        } else {
+          // Server error or other failure
+          console.error("Generation recording failed:", genResponse.status, errorData);
+          setError("Warning: Your processed audio couldn't be saved to your account. It's available below but won't appear in your history.");
+        }
+        
+        // Still show results locally so user can access their processed audio
         setResult(data);
         setOriginalUrl(blob.url);
-        fetchUsage();
+        fetchUsage(); // Refresh usage to show accurate count
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");

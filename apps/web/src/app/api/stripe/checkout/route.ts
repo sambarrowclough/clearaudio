@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import { stripe, PLANS } from "@/lib/stripe";
+import { getStripe, PLANS } from "@/lib/stripe";
 import { db } from "@/lib/db";
 import { subscription } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -26,11 +26,22 @@ export async function POST() {
       .where(eq(subscription.userId, userId))
       .limit(1);
 
+    // Prevent duplicate subscriptions - check if user already has an active Pro subscription
+    if (
+      existingSub[0]?.plan === "pro" &&
+      (existingSub[0]?.status === "active" || existingSub[0]?.status === "trialing")
+    ) {
+      return NextResponse.json(
+        { error: "You already have an active Pro subscription" },
+        { status: 400 }
+      );
+    }
+
     let stripeCustomerId = existingSub[0]?.stripeCustomerId;
 
     // Create Stripe customer if not exists
     if (!stripeCustomerId) {
-      const customer = await stripe.customers.create({
+      const customer = await getStripe().customers.create({
         email: userEmail,
         metadata: {
           userId,
@@ -68,7 +79,7 @@ export async function POST() {
     const headersList = await headers();
     const origin = headersList.get("origin") || process.env.BETTER_AUTH_URL;
 
-    const checkoutSession = await stripe.checkout.sessions.create({
+    const checkoutSession = await getStripe().checkout.sessions.create({
       customer: stripeCustomerId,
       mode: "subscription",
       payment_method_types: ["card"],

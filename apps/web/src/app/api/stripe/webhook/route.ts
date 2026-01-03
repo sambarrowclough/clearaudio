@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { db } from "@/lib/db";
 import { subscription } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    event = getStripe().webhooks.constructEvent(body, signature, webhookSecret);
   } catch (err) {
     console.error("Webhook signature verification failed:", err);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
@@ -66,16 +66,23 @@ export async function POST(req: NextRequest) {
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const userId = session.metadata?.userId;
-  const customerId = session.customer as string;
-  const subscriptionId = session.subscription as string;
+  const customerId = session.customer;
+  const subscriptionId = session.subscription;
 
   if (!userId) {
-    console.error("No userId in checkout session metadata");
-    return;
+    throw new Error("No userId in checkout session metadata");
+  }
+
+  if (typeof customerId !== "string" || !customerId) {
+    throw new Error("No customer ID in checkout session");
+  }
+
+  if (typeof subscriptionId !== "string" || !subscriptionId) {
+    throw new Error("No subscription ID in checkout session");
   }
 
   // Fetch the subscription to get period end
-  const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const stripeSubscription = await getStripe().subscriptions.retrieve(subscriptionId);
 
   await db
     .update(subscription)

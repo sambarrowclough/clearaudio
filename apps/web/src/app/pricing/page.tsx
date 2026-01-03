@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { PLANS } from "@/lib/stripe";
@@ -11,7 +11,24 @@ function PricingContent() {
   const searchParams = useSearchParams();
   const canceled = searchParams.get("canceled");
   const [isLoading, setIsLoading] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState<string | null>(null);
   const { data: session } = authClient.useSession();
+
+  // Fetch user's current plan
+  useEffect(() => {
+    if (session?.user) {
+      fetch("/api/usage")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.plan) {
+            setCurrentPlan(data.plan);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [session?.user]);
+
+  const isProUser = currentPlan === "pro";
 
   const handleUpgrade = async () => {
     if (!session?.user) {
@@ -29,6 +46,12 @@ function PricingContent() {
 
       if (data.url) {
         window.location.href = data.url;
+      } else if (data.error) {
+        // Handle error - e.g., user already has Pro subscription
+        alert(data.error);
+        if (data.error.includes("already have")) {
+          setCurrentPlan("pro");
+        }
       } else {
         console.error("No checkout URL returned");
       }
@@ -170,7 +193,7 @@ function PricingContent() {
               </div>
 
               <button
-                onClick={handleUpgrade}
+                onClick={isProUser ? () => router.push("/account") : handleUpgrade}
                 disabled={isLoading}
                 style={{
                   width: "100%",
@@ -189,6 +212,8 @@ function PricingContent() {
                     <span className="mac-loading" style={{ borderColor: "var(--mac-black)" }} />
                     Loading...
                   </span>
+                ) : isProUser ? (
+                  "✓ Current Plan"
                 ) : (
                   "Upgrade to Pro"
                 )}

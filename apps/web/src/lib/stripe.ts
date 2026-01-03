@@ -1,11 +1,23 @@
 import Stripe from "stripe";
 
-// Only initialize Stripe on the server side
-// This file is imported by client components for PLANS config,
-// so we need to handle the case where STRIPE_SECRET_KEY isn't available
-export const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY)
-  : (null as unknown as Stripe);
+// Lazy-initialized Stripe instance
+let _stripe: Stripe | null = null;
+
+/**
+ * Get the Stripe client instance.
+ * Throws a clear error if STRIPE_SECRET_KEY is not configured.
+ */
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error(
+        "Stripe is not configured. Please set the STRIPE_SECRET_KEY environment variable."
+      );
+    }
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  }
+  return _stripe;
+}
 
 // Plan configuration
 export const PLANS = {

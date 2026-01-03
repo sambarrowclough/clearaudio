@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import { recordGeneration, checkUsageLimit, checkFeatureAccess } from "@/lib/usage";
+import { recordGenerationAtomic, checkFeatureAccess } from "@/lib/usage";
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,16 +25,8 @@ export async function POST(req: NextRequest) {
       description,
     } = body;
 
-    // Verify usage limit
-    const usageCheck = await checkUsageLimit(session.user.id);
-    if (!usageCheck.allowed) {
-      return NextResponse.json(
-        { error: "Usage limit exceeded", ...usageCheck },
-        { status: 403 }
-      );
-    }
-
-    // Verify feature access
+    // Verify feature access (model size, file size, high quality mode)
+    // This is safe to check separately as it doesn't involve counting
     const featureCheck = await checkFeatureAccess(session.user.id, {
       modelSize,
       highQuality,
@@ -48,8 +40,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Record the generation and get shareId
-    const shareId = await recordGeneration(session.user.id, {
+    // Atomically check usage limit and record generation
+    // This prevents race conditions where concurrent requests could exceed the limit
+    const result = await recordGenerationAtomic(session.user.id, {
       modelSize,
       highQuality: highQuality ?? false,
       durationMs,
@@ -60,7 +53,21 @@ export async function POST(req: NextRequest) {
       description,
     });
 
-    return NextResponse.json({ success: true, shareId });
+    if (!result.success) {
+      return NextResponse.json(
+        { 
+          error: "Usage limit exceeded",
+          allowed: false,
+          used: result.used,
+          limit: result.limit,
+          plan: result.plan,
+          remaining: 0,
+        },
+        { status: 403 }
+      );
+    }
+
+    return NextResponse.json({ success: true, shareId: result.shareId });
   } catch (error) {
     console.error("Generation recording error:", error);
     return NextResponse.json(

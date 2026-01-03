@@ -130,7 +130,8 @@ export async function checkFeatureAccess(
 }
 
 /**
- * Record a generation and return the shareId
+ * Record a generation and return the shareId.
+ * This is NOT atomic with usage checks - use recordGenerationAtomic for concurrent-safe recording.
  */
 export async function recordGeneration(
   userId: string,
@@ -162,6 +163,79 @@ export async function recordGeneration(
   });
   
   return shareId;
+}
+
+/**
+ * Atomically check usage limit and record generation in a single operation.
+ * Uses a conditional INSERT that only succeeds if the user is under their limit.
+ * This prevents race conditions where concurrent requests could exceed the limit.
+ */
+export async function recordGenerationAtomic(
+  userId: string,
+  metadata: {
+    modelSize: string;
+    highQuality: boolean;
+    durationMs?: number;
+    fileSizeBytes?: number;
+    originalUrl?: string;
+    targetUrl?: string;
+    residualUrl?: string;
+    description?: string;
+  }
+): Promise<{
+  success: boolean;
+  shareId?: string;
+  used?: number;
+  limit?: number;
+  plan?: PlanType;
+}> {
+  // Get the user's plan and calculate period start
+  const { plan, currentPeriodEnd } = await getUserPlan(userId);
+  const planConfig = PLANS[plan];
+  const periodStart = getBillingPeriodStart(currentPeriodEnd);
+  const limit = planConfig.generationsPerMonth;
+  
+  const shareId = nanoid(8);
+  const generationId = crypto.randomUUID();
+  
+  // Use a conditional INSERT that only succeeds if count < limit
+  // This is atomic at the database level - the subquery count and insert happen together
+  const result = await db.execute(sql`
+    INSERT INTO generation (
+      id, share_id, user_id, model_size, high_quality, 
+      duration_ms, file_size_bytes, original_url, target_url, residual_url, description, created_at
+    )
+    SELECT 
+      ${generationId}, ${shareId}, ${userId}, ${metadata.modelSize}, ${metadata.highQuality},
+      ${metadata.durationMs ?? null}, ${metadata.fileSizeBytes ?? null}, 
+      ${metadata.originalUrl ?? null}, ${metadata.targetUrl ?? null}, 
+      ${metadata.residualUrl ?? null}, ${metadata.description ?? null}, NOW()
+    WHERE (
+      SELECT COUNT(*) FROM generation 
+      WHERE user_id = ${userId} AND created_at >= ${periodStart}
+    ) < ${limit}
+    RETURNING share_id
+  `);
+  
+  // Check if the insert succeeded (a row was returned)
+  const rows = result.rows as Array<{ share_id: string }>;
+  if (rows.length > 0) {
+    return {
+      success: true,
+      shareId: rows[0].share_id,
+    };
+  }
+  
+  // Insert failed - user is at or over their limit
+  // Get current usage count for the error response
+  const used = await getUsageCount(userId, periodStart);
+  
+  return {
+    success: false,
+    used,
+    limit,
+    plan,
+  };
 }
 
 /**
