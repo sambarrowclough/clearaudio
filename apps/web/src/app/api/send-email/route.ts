@@ -29,8 +29,6 @@ function isValidInternalUrl(url: string): boolean {
       "localhost",
       "clearaudio.app",
       "www.clearaudio.app",
-      "cleanaudio.app",
-      "www.cleanaudio.app",
     ];
     // Also allow the configured BETTER_AUTH_URL host
     if (process.env.BETTER_AUTH_URL) {

@@ -4,7 +4,7 @@ import "./globals.css";
 import { ScrollWrapper } from "@/components/ScrollWrapper";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://cleanaudio.app"),
+  metadataBase: new URL("https://clearaudio.app"),
   title: "ClearAudio – Fix Bad Audio with a Prompt",
   description:
     "Upload audio or video, describe what you want to keep ('the speaker', 'the voice', 'the music'), and we'll clean up the rest. Powered by Meta's SAM-Audio.",
@@ -31,10 +31,10 @@ export const metadata: Metadata = {
     siteName: "ClearAudio",
     type: "website",
     locale: "en_US",
-    url: "https://cleanaudio.app",
+    url: "https://clearaudio.app",
     images: [
       {
-        url: "https://cleanaudio.app/og-image.png",
+        url: "https://clearaudio.app/og-image.png",
         width: 1200,
         height: 630,
         alt: "ClearAudio - Fix Bad Audio with a Prompt",
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "ClearAudio – Fix Bad Audio with a Prompt",
     description: "Upload audio, describe what to keep, get clean results.",
-    images: ["https://cleanaudio.app/og-image.png"],
+    images: ["https://clearaudio.app/og-image.png"],
   },
 };
 
