@@ -16,6 +16,7 @@ import {
   IconQuality,
   IconVideo,
 } from "@/components/MacIcons";
+import { SignInModal } from "@/components/SignInModal";
 
 type ModelSize = "small" | "base" | "large" | "large-tv";
 
@@ -71,7 +72,7 @@ const MODEL_OPTIONS: {
 
 export default function Home() {
   const router = useRouter();
-  const { data: session } = authClient.useSession();
+  const { data: session, refetch: refetchSession } = authClient.useSession();
 
   const [file, setFile] = useState<File | null>(null);
   const [description, setDescription] = useState("");
@@ -87,9 +88,11 @@ export default function Home() {
   const [showDemo, setShowDemo] = useState(false);
   const [usage, setUsage] = useState<UsageData | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showSignInModal, setShowSignInModal] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const descriptionInputRef = useRef<HTMLInputElement>(null);
+  const pendingGenerationRef = useRef(false);
 
   const isPro = usage?.plan === "pro";
 
@@ -167,11 +170,54 @@ export default function Home() {
   const handleProcess = async () => {
     if (!file || !description.trim()) return;
 
-    // Check if user is signed in
+    // Check if user is signed in - show modal instead of redirect
     if (!session?.user) {
-      router.push("/sign-in?redirect=/");
+      pendingGenerationRef.current = true;
+      setShowSignInModal(true);
       return;
     }
+
+    // Proceed with processing
+    doProcess();
+  };
+
+  const handleModelSelect = (model: (typeof MODEL_OPTIONS)[0]) => {
+    if (model.requiresPro && !isPro) {
+      // Still allow selection but show indicator
+      setModelSize(model.id);
+    } else {
+      setModelSize(model.id);
+    }
+  };
+
+  const handleSignInSuccess = async () => {
+    // Force refetch the session to update React state
+    await refetchSession();
+    
+    // Get fresh session data directly (not from hook state which may be stale)
+    const { data: freshSession } = await authClient.getSession();
+    
+    if (!freshSession?.user) {
+      // Session still not available, something went wrong
+      console.error("Session not available after sign in");
+      return;
+    }
+    
+    // Refetch usage data
+    await fetchUsage();
+    
+    // Auto-trigger generation if there was a pending one
+    if (pendingGenerationRef.current && file && description.trim()) {
+      pendingGenerationRef.current = false;
+      // Call the processing logic directly instead of handleProcess
+      // since handleProcess would check the stale session state
+      doProcess();
+    }
+  };
+
+  // Extracted processing logic that doesn't check session (already verified)
+  const doProcess = async () => {
+    if (!file || !description.trim()) return;
 
     // Check usage limit
     if (usage && usage.remaining <= 0) {
@@ -234,34 +280,36 @@ export default function Home() {
       }
 
       const data: ProcessingResult = await response.json();
-      setResult(data);
 
-      // Record the generation
-      await fetch("/api/generation", {
+      // Record the generation and get shareId
+      const genResponse = await fetch("/api/generation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           modelSize,
           highQuality,
           fileSizeBytes: file.size,
+          originalUrl: blob.url,
+          targetUrl: data.target_url,
+          residualUrl: data.residual_url,
+          description,
         }),
       });
 
-      // Refresh usage count
-      fetchUsage();
+      if (genResponse.ok) {
+        const { shareId } = await genResponse.json();
+        // Redirect to the share page
+        router.push(`/g/${shareId}`);
+      } else {
+        // If generation recording fails, still show results locally
+        setResult(data);
+        setOriginalUrl(blob.url);
+        fetchUsage();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  const handleModelSelect = (model: (typeof MODEL_OPTIONS)[0]) => {
-    if (model.requiresPro && !isPro) {
-      // Still allow selection but show indicator
-      setModelSize(model.id);
-    } else {
-      setModelSize(model.id);
     }
   };
 
@@ -512,9 +560,55 @@ export default function Home() {
             type="text"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="e.g. the speaker, the voice, the music..."
+            placeholder="Type or select below..."
             className="mac-input"
           />
+          {/* Common Prompts */}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "8px",
+              marginTop: "10px",
+            }}
+          >
+            {[
+              "the speaker",
+              "vocals only",
+              "the music",
+              "speech",
+              "dialogue",
+              "background music",
+            ].map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => setDescription(prompt)}
+                style={{
+                  padding: "6px 12px",
+                  fontSize: "12px",
+                  fontFamily: "var(--font-chicago)",
+                  background:
+                    description === prompt
+                      ? "var(--mac-black)"
+                      : "var(--mac-white)",
+                  color:
+                    description === prompt
+                      ? "var(--mac-white)"
+                      : "var(--mac-black)",
+                  border: "2px solid var(--mac-black)",
+                  cursor: "pointer",
+                  boxShadow:
+                    description === prompt
+                      ? "inset 2px 2px 0 #666"
+                      : "inset -1px -1px 0 var(--mac-black), inset 1px 1px 0 var(--mac-white)",
+                  transition: "all 100ms",
+                }}
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Model Selection */}
@@ -1046,6 +1140,13 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Sign In Modal */}
+      <SignInModal
+        open={showSignInModal}
+        onOpenChange={setShowSignInModal}
+        onSuccess={handleSignInSuccess}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { magicLink } from "better-auth/plugins";
+import { emailOTP } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "./db";
 import * as schema from "./db/schema";
@@ -19,7 +19,7 @@ export const auth = betterAuth({
   }),
 
   emailAndPassword: {
-    enabled: false, // We're using magic link instead
+    enabled: false,
   },
 
   socialProviders: {
@@ -30,25 +30,30 @@ export const auth = betterAuth({
   },
 
   plugins: [
-    magicLink({
-      sendMagicLink: async ({ email, url }) => {
-        // Call our API endpoint to send the magic link email
+    emailOTP({
+      async sendVerificationOTP({ email, otp }) {
+        // Call our API endpoint to send the OTP email
         const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3000";
         const response = await fetch(`${baseUrl}/api/send-email`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ email, url }),
+          body: JSON.stringify({ 
+            email, 
+            otp,
+            type: "otp"
+          }),
         });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || "Failed to send magic link email");
+          throw new Error(errorData.error || "Failed to send OTP email");
         }
       },
+      otpLength: 6,
+      expiresIn: 600, // 10 minutes
     }),
     nextCookies(), // Must be last plugin
   ],
 });
-

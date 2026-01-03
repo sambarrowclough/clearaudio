@@ -14,7 +14,16 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { modelSize, highQuality, fileSizeBytes, durationMs } = body;
+    const { 
+      modelSize, 
+      highQuality, 
+      fileSizeBytes, 
+      durationMs,
+      originalUrl,
+      targetUrl,
+      residualUrl,
+      description,
+    } = body;
 
     // Verify usage limit
     const usageCheck = await checkUsageLimit(session.user.id);
@@ -39,15 +48,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Record the generation
-    await recordGeneration(session.user.id, {
+    // Record the generation and get shareId
+    const shareId = await recordGeneration(session.user.id, {
       modelSize,
       highQuality: highQuality ?? false,
       durationMs,
       fileSizeBytes,
+      originalUrl,
+      targetUrl,
+      residualUrl,
+      description,
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, shareId });
   } catch (error) {
     console.error("Generation recording error:", error);
     return NextResponse.json(

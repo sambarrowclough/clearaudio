@@ -2,6 +2,7 @@ import { db } from "./db";
 import { subscription, generation } from "./db/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { PLANS, type PlanType } from "./stripe";
+import { nanoid } from "nanoid";
 
 /**
  * Get the user's current plan
@@ -129,7 +130,7 @@ export async function checkFeatureAccess(
 }
 
 /**
- * Record a generation
+ * Record a generation and return the shareId
  */
 export async function recordGeneration(
   userId: string,
@@ -138,16 +139,42 @@ export async function recordGeneration(
     highQuality: boolean;
     durationMs?: number;
     fileSizeBytes?: number;
+    originalUrl?: string;
+    targetUrl?: string;
+    residualUrl?: string;
+    description?: string;
   }
-): Promise<void> {
+): Promise<string> {
+  const shareId = nanoid(8);
+  
   await db.insert(generation).values({
     id: crypto.randomUUID(),
+    shareId,
     userId,
     modelSize: metadata.modelSize,
     highQuality: metadata.highQuality,
     durationMs: metadata.durationMs,
     fileSizeBytes: metadata.fileSizeBytes,
+    originalUrl: metadata.originalUrl,
+    targetUrl: metadata.targetUrl,
+    residualUrl: metadata.residualUrl,
+    description: metadata.description,
   });
+  
+  return shareId;
+}
+
+/**
+ * Get a generation by its shareId
+ */
+export async function getGenerationByShareId(shareId: string) {
+  const result = await db
+    .select()
+    .from(generation)
+    .where(eq(generation.shareId, shareId))
+    .limit(1);
+  
+  return result[0] || null;
 }
 
 /**

@@ -75,6 +75,7 @@ export const subscription = pgTable("subscription", {
 // Usage tracking for generations
 export const generation = pgTable("generation", {
   id: text("id").primaryKey(),
+  shareId: text("share_id").unique(), // Short nanoid for shareable URLs
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
@@ -82,6 +83,10 @@ export const generation = pgTable("generation", {
   highQuality: boolean("high_quality").notNull().default(false),
   durationMs: integer("duration_ms"), // Processing time
   fileSizeBytes: integer("file_size_bytes"), // Input file size
+  originalUrl: text("original_url"), // URL to original audio
+  targetUrl: text("target_url"), // URL to cleaned audio
+  residualUrl: text("residual_url"), // URL to removed sounds
+  description: text("description"), // What user wanted to keep
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
