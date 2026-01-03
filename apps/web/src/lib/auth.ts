@@ -34,10 +34,17 @@ export const auth = betterAuth({
       async sendVerificationOTP({ email, otp }) {
         // Call our API endpoint to send the OTP email
         const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3000";
+        const internalSecret = process.env.BETTER_AUTH_SECRET;
+
+        if (!internalSecret) {
+          throw new Error("BETTER_AUTH_SECRET not configured");
+        }
+
         const response = await fetch(`${baseUrl}/api/send-email`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "x-internal-secret": internalSecret,
           },
           body: JSON.stringify({ 
             email, 

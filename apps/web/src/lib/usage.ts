@@ -102,14 +102,20 @@ export async function checkFeatureAccess(
   const { plan } = await getUserPlan(userId);
   const planConfig = PLANS[plan];
 
-  if (feature.modelSize) {
-    const allowedModels = planConfig.allowedModels as readonly string[];
-    if (!allowedModels.includes(feature.modelSize)) {
-      return {
-        allowed: false,
-        reason: `${feature.modelSize} model requires Pro plan`,
-      };
-    }
+  // modelSize is required - reject early if missing to prevent database constraint violations
+  if (!feature.modelSize) {
+    return {
+      allowed: false,
+      reason: "Model size is required",
+    };
+  }
+
+  const allowedModels = planConfig.allowedModels as readonly string[];
+  if (!allowedModels.includes(feature.modelSize)) {
+    return {
+      allowed: false,
+      reason: `${feature.modelSize} model requires Pro plan`,
+    };
   }
 
   if (feature.highQuality && !planConfig.highQualityAllowed) {
