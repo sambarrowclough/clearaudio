@@ -61,28 +61,19 @@ def download_model(model_size: str = "large"):
     timeout=600,
     volumes={MODEL_DIR: model_volume},
     secrets=[modal.Secret.from_name("huggingface-secret")],
-    buffer_containers=1,  # Keep 1 extra container ready during active periods
-    scaledown_window=300,  # Keep idle containers alive for 5 minutes
+    #buffer_containers=1,  # Keep 1 extra container ready during active periods
+    scaledown_window=5,  # Keep idle containers alive for 5 seconds
+    enable_memory_snapshot=True,  # CPU memory snapshots for faster cold starts
 )
 class AudioSeparator:
     """SAM Audio model class with cached model loading."""
     
     model_size: str = modal.parameter(default="large")
     
-    @modal.enter()
-    def setup(self):
-        """Load the model once when container starts."""
-        import os
-        import torch
+    @modal.enter(snap=True)
+    def load_to_cpu(self):
+        """Load the model to CPU memory - this gets snapshotted."""
         from sam_audio import SAMAudio, SAMAudioProcessor
-        
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"Using device: {self.device}")
-        
-        # Enable TF32 for faster matrix operations on Ampere+ GPUs (A100, H100, B200)
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        print("TF32 enabled for matmul and cudnn")
         
         # Symlink .checkpoints to volume so ImageBind weights are cached
         checkpoint_dir = MODEL_DIR / ".checkpoints"
@@ -99,27 +90,42 @@ class AudioSeparator:
         imagebind_path = checkpoint_dir / "imagebind_huge.pth"
         imagebind_existed = imagebind_path.exists()
         
-        # Check if model is cached in volume
+        # Load model to CPU (not GPU) - will be moved to GPU after restore
         # Note: SAM Audio's CLAP ranker doesn't support bfloat16, so we use float32
         if local_path.exists():
             print(f"Loading model from cache: {local_path}")
-            self.model = SAMAudio.from_pretrained(str(local_path)).to(self.device).eval()
+            self.model = SAMAudio.from_pretrained(str(local_path)).to("cpu").eval()
             self.processor = SAMAudioProcessor.from_pretrained(str(local_path))
         else:
             print(f"Downloading model: {model_id}")
-            self.model = SAMAudio.from_pretrained(model_id).to(self.device).eval()
+            self.model = SAMAudio.from_pretrained(model_id).to("cpu").eval()
             self.processor = SAMAudioProcessor.from_pretrained(model_id)
         
-        print("Model loaded with float32 precision (TF32 enabled for speedup)")
+        print("Model loaded to CPU memory (will be snapshotted)")
         
         # Commit volume if ImageBind was just downloaded
         if not imagebind_existed and imagebind_path.exists():
             print(f"Caching ImageBind weights to volume...")
             model_volume.commit()
             print(f"ImageBind weights cached at {imagebind_path}")
+
+    @modal.enter(snap=False)
+    def move_to_gpu(self):
+        """Move model to GPU after restoring from snapshot."""
+        import torch  # Re-import to re-initialize GPU availability state
         
-        print("Model loaded and optimized successfully!")
-    
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Using device: {self.device}")
+        
+        # Enable TF32 for faster matrix operations on Ampere+ GPUs (A100, H100, B200)
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        print("TF32 enabled for matmul and cudnn")
+        
+        # Move model to GPU
+        self.model = self.model.to(self.device)
+        print("Model moved to GPU and ready!")
+
     @modal.method()
     def separate(
         self,
