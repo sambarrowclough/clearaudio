@@ -951,6 +951,18 @@ export default function Home() {
               "Clean Audio"
             )}
           </button>
+          {/* Processing time warning - shown during processing */}
+          {isProcessing && (
+            <div
+              style={{
+                marginTop: "10px",
+                fontSize: "11px",
+                opacity: 0.5,
+              }}
+            >
+              Usually ~20 seconds, but may take up to 2 minutes
+            </div>
+          )}
         </div>
 
         {/* Error Message */}
