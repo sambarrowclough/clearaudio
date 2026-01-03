@@ -63,13 +63,15 @@ def download_model(model_size: str = "large"):
     secrets=[modal.Secret.from_name("huggingface-secret")],
     buffer_containers=1,  # Keep 1 extra container ready during active periods
     scaledown_window=300,  # Keep idle containers alive for 5 minutes
+    enable_memory_snapshot=True,  # Snapshot CPU memory for faster cold starts
+    experimental_options={"enable_gpu_snapshot": True},  # Snapshot GPU memory too
 )
 class AudioSeparator:
-    """SAM Audio model class with cached model loading."""
+    """SAM Audio model class with cached model loading and GPU memory snapshots."""
     
     model_size: str = modal.parameter(default="large")
     
-    @modal.enter()
+    @modal.enter(snap=True)
     def setup(self):
         """Load the model once when container starts."""
         import os
@@ -118,7 +120,45 @@ class AudioSeparator:
             model_volume.commit()
             print(f"ImageBind weights cached at {imagebind_path}")
         
-        print("Model loaded and optimized successfully!")
+        # Warmup: Run a dummy inference to pre-compile CUDA kernels
+        # This ensures the snapshot includes compiled kernels for faster cold starts
+        print("Running warmup inference to compile CUDA kernels...")
+        self._warmup()
+        
+        print("Model loaded, warmed up, and ready for snapshotting!")
+    
+    def _warmup(self):
+        """Run a dummy inference pass to compile CUDA kernels before snapshot."""
+        import tempfile
+        import torch
+        import torchaudio
+        
+        # Create a short 1-second silent audio file for warmup
+        sample_rate = 16000
+        duration_seconds = 1
+        silent_waveform = torch.zeros(1, sample_rate * duration_seconds)
+        
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            torchaudio.save(f.name, silent_waveform, sample_rate)
+            temp_path = f.name
+        
+        try:
+            # Process through the model to compile all kernels
+            inputs = self.processor(
+                audios=[temp_path],
+                descriptions=["warmup"],
+            ).to(self.device)
+            
+            with torch.inference_mode():
+                _ = self.model.separate(inputs)
+            
+            torch.cuda.synchronize()
+            print("Warmup complete - CUDA kernels compiled")
+        except Exception as e:
+            print(f"Warmup failed (non-fatal): {e}")
+        finally:
+            import os
+            os.unlink(temp_path)
     
     @modal.method()
     def separate(

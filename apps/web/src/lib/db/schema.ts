@@ -3,6 +3,7 @@ import {
   text,
   timestamp,
   boolean,
+  integer,
 } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
@@ -53,5 +54,39 @@ export const verification = pgTable("verification", {
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at"),
   updatedAt: timestamp("updated_at"),
+});
+
+// Stripe subscription tracking
+export const subscription = pgTable("subscription", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" })
+    .unique(),
+  stripeCustomerId: text("stripe_customer_id").unique(),
+  stripeSubscriptionId: text("stripe_subscription_id").unique(),
+  plan: text("plan").notNull().default("free"), // 'free' | 'pro'
+  status: text("status").notNull().default("active"), // 'active' | 'canceled' | 'past_due' | 'trialing'
+  currentPeriodEnd: timestamp("current_period_end"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Usage tracking for generations
+export const generation = pgTable("generation", {
+  id: text("id").primaryKey(),
+  shareId: text("share_id").unique(), // Short nanoid for shareable URLs
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  modelSize: text("model_size").notNull(), // 'small' | 'base' | 'large' | 'large-tv'
+  highQuality: boolean("high_quality").notNull().default(false),
+  durationMs: integer("duration_ms"), // Processing time
+  fileSizeBytes: integer("file_size_bytes"), // Input file size
+  originalUrl: text("original_url"), // URL to original audio
+  targetUrl: text("target_url"), // URL to cleaned audio
+  residualUrl: text("residual_url"), // URL to removed sounds
+  description: text("description"), // What user wanted to keep
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

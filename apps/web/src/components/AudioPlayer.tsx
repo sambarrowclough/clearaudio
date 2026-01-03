@@ -15,18 +15,38 @@ export function AudioPlayer({ src }: AudioPlayerProps) {
   const [duration, setDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  // Track dragging state in a ref to avoid dependency issues
+  const isDraggingRef = useRef(isDragging);
+  isDraggingRef.current = isDragging;
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+
+    // Reset states when src changes
+    setIsLoading(true);
+    setHasError(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(false);
 
     const handleLoadedMetadata = () => {
       setDuration(audio.duration);
       setIsLoading(false);
     };
 
+    const handleDurationChange = () => {
+      // Fallback for when duration becomes available
+      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+        setDuration(audio.duration);
+        setIsLoading(false);
+      }
+    };
+
     const handleTimeUpdate = () => {
-      if (!isDragging) {
+      if (!isDraggingRef.current) {
         setCurrentTime(audio.currentTime);
       }
     };
@@ -40,18 +60,30 @@ export function AudioPlayer({ src }: AudioPlayerProps) {
       setIsLoading(false);
     };
 
+    const handleError = () => {
+      setIsLoading(false);
+      setHasError(true);
+    };
+
     audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audio.addEventListener("durationchange", handleDurationChange);
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
     audio.addEventListener("canplay", handleCanPlay);
+    audio.addEventListener("error", handleError);
+
+    // Force load the audio
+    audio.load();
 
     return () => {
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("durationchange", handleDurationChange);
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("ended", handleEnded);
       audio.removeEventListener("canplay", handleCanPlay);
+      audio.removeEventListener("error", handleError);
     };
-  }, [isDragging]);
+  }, [src]);
 
   const togglePlay = () => {
     const audio = audioRef.current;
@@ -143,9 +175,21 @@ export function AudioPlayer({ src }: AudioPlayerProps) {
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+  if (hasError) {
+    return (
+      <div className="mac-audio-player">
+        <div className="mac-audio-controls" style={{ opacity: 0.5 }}>
+          <span style={{ fontSize: "11px", color: "var(--mac-black)" }}>
+            ⚠ Audio unavailable
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mac-audio-player">
-      <audio ref={audioRef} src={src} preload="metadata" />
+      <audio ref={audioRef} src={src} preload="auto" />
 
       <div className="mac-audio-controls">
         {/* Play/Pause Button */}
