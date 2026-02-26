@@ -1,15 +1,13 @@
 """Tests for the FastAPI application with fal.ai backend."""
 
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-from fastapi.testclient import TestClient
+from unittest.mock import patch
 
 os.environ["AUDIO_BACKEND"] = "fal"
 
-from src.engine.fal_service import FalServiceError, SeparationResult
-from src.engine.main import app
+from fastapi.testclient import TestClient  # noqa: E402
+
+from src.engine.main import app  # noqa: E402
 
 client = TestClient(app)
 

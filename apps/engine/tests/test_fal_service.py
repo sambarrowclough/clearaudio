@@ -1,6 +1,5 @@
 """Tests for the fal.ai audio separation service."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -8,7 +7,6 @@ import pytest
 from src.engine.fal_service import (
     ACCELERATION_MAP,
     FAL_MAX_RERANKING_CANDIDATES,
-    FAL_MODEL_ID,
     FalServiceError,
     SeparationResult,
     _build_fal_arguments,
@@ -62,7 +60,9 @@ class TestParameterMapping:
             reranking_candidates=16,
         )
         assert args["predict_spans"] is True
-        assert args["reranking_candidates"] == FAL_MAX_RERANKING_CANDIDATES
+        assert (
+            args["reranking_candidates"] == FAL_MAX_RERANKING_CANDIDATES
+        )
         assert args["acceleration"] == "balanced"
 
     def test_build_arguments_small_model(self):
@@ -100,7 +100,9 @@ class TestRetryableErrors:
         assert _is_retryable_error(Exception("rate limit exceeded"))
 
     def test_validation_error_is_not_retryable(self):
-        assert not _is_retryable_error(Exception("Invalid prompt format"))
+        assert not _is_retryable_error(
+            Exception("Invalid prompt format")
+        )
 
     def test_auth_error_is_not_retryable(self):
         assert not _is_retryable_error(Exception("401 Unauthorized"))
@@ -110,8 +112,14 @@ class TestSeparate:
     @pytest.mark.asyncio
     async def test_successful_separation(self):
         mock_fal_result = {
-            "target": {"url": "https://fal.media/target.wav", "content_type": "audio/wav"},
-            "residual": {"url": "https://fal.media/residual.wav", "content_type": "audio/wav"},
+            "target": {
+                "url": "https://fal.media/target.wav",
+                "content_type": "audio/wav",
+            },
+            "residual": {
+                "url": "https://fal.media/residual.wav",
+                "content_type": "audio/wav",
+            },
             "sample_rate": 48000,
             "duration": 10.5,
         }
@@ -119,28 +127,34 @@ class TestSeparate:
         target_bytes = b"RIFF" + b"\x00" * 100
         residual_bytes = b"RIFF" + b"\x00" * 80
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.content = target_bytes
-
-        mock_response_residual = MagicMock()
-        mock_response_residual.status_code = 200
-        mock_response_residual.content = residual_bytes
-
         with (
             patch("src.engine.fal_service.fal_client") as mock_fal,
-            patch("src.engine.fal_service.httpx.AsyncClient") as mock_httpx,
+            patch(
+                "src.engine.fal_service.httpx.AsyncClient"
+            ) as mock_httpx,
         ):
-            mock_fal.subscribe_async = AsyncMock(return_value=mock_fal_result)
+            mock_fal.subscribe_async = AsyncMock(
+                return_value=mock_fal_result
+            )
             mock_fal.InProgress = type("InProgress", (), {})
             mock_fal.Queued = type("Queued", (), {})
 
             mock_client = AsyncMock()
             download_calls = iter([
-                MagicMock(content=target_bytes, status_code=200, raise_for_status=MagicMock()),
-                MagicMock(content=residual_bytes, status_code=200, raise_for_status=MagicMock()),
+                MagicMock(
+                    content=target_bytes,
+                    status_code=200,
+                    raise_for_status=MagicMock(),
+                ),
+                MagicMock(
+                    content=residual_bytes,
+                    status_code=200,
+                    raise_for_status=MagicMock(),
+                ),
             ])
-            mock_client.get = AsyncMock(side_effect=lambda url: next(download_calls))
+            mock_client.get = AsyncMock(
+                side_effect=lambda url: next(download_calls)
+            )
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=False)
             mock_httpx.return_value = mock_client
@@ -157,7 +171,10 @@ class TestSeparate:
             assert result.sample_rate == 48000
             assert result.duration == 10.5
             assert result.target_url == "https://fal.media/target.wav"
-            assert result.residual_url == "https://fal.media/residual.wav"
+            assert (
+                result.residual_url
+                == "https://fal.media/residual.wav"
+            )
             assert len(result.target_bytes) > 0
             assert len(result.residual_bytes) > 0
             assert result.processing_time > 0
@@ -170,11 +187,15 @@ class TestSeparate:
         }
 
         with patch("src.engine.fal_service.fal_client") as mock_fal:
-            mock_fal.subscribe_async = AsyncMock(return_value=mock_fal_result)
+            mock_fal.subscribe_async = AsyncMock(
+                return_value=mock_fal_result
+            )
             mock_fal.InProgress = type("InProgress", (), {})
             mock_fal.Queued = type("Queued", (), {})
 
-            with pytest.raises(FalServiceError, match="incomplete result"):
+            with pytest.raises(
+                FalServiceError, match="incomplete result"
+            ):
                 await separate(
                     audio_url="https://blob.vercel.com/input.wav",
                     description="voice",

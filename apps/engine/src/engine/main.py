@@ -5,12 +5,13 @@ import os
 from typing import Literal
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
-import httpx
-import vercel_blob
-from fastapi import FastAPI, Form, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+import httpx  # noqa: E402
+import vercel_blob  # noqa: E402
+from fastapi import FastAPI, Form, HTTPException  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("clearaudio")
@@ -108,8 +109,8 @@ async def _separate_with_modal(
     if len(audio_bytes) == 0:
         raise HTTPException(status_code=400, detail="Empty audio file")
 
-    AudioSeparator = modal.Cls.from_name("clearclean-audio", "AudioSeparator")
-    separator = AudioSeparator(model_size=model_size)
+    cls = modal.Cls.from_name("clearclean-audio", "AudioSeparator")
+    separator = cls(model_size=model_size)
     result = separator.separate.remote(
         audio_bytes=audio_bytes,
         description=description,
@@ -159,7 +160,7 @@ async def separate_audio(
     logger.info("[INPUT]  %s", audio_url)
     logger.info('[PROMPT] "%s"', description)
     logger.info(
-        "[PARAMS] backend=%s, model=%s, high_quality=%s, candidates=%d",
+        "[PARAMS] backend=%s, model=%s, hq=%s, candidates=%d",
         AUDIO_BACKEND,
         model_size,
         high_quality,
@@ -186,8 +187,10 @@ async def separate_audio(
         else:
             raise HTTPException(
                 status_code=500,
-                detail=f"Unknown AUDIO_BACKEND: {AUDIO_BACKEND!r}. "
-                f"Set to 'fal' or 'modal'.",
+                detail=(
+                    f"Unknown AUDIO_BACKEND: {AUDIO_BACKEND!r}. "
+                    f"Set to 'fal' or 'modal'."
+                ),
             )
     except HTTPException:
         raise
@@ -226,8 +229,9 @@ async def list_models():
     ]
 
     if AUDIO_BACKEND == "fal":
+        from .fal_service import ACCELERATION_MAP
+
         for m in models:
-            from .fal_service import ACCELERATION_MAP
             accel = ACCELERATION_MAP.get(m["id"], "balanced")
             m["backend_acceleration"] = accel
 
