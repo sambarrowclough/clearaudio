@@ -5,25 +5,26 @@ import os
 from typing import Literal
 
 from dotenv import load_dotenv
-load_dotenv()  # Load .env file for local development
+load_dotenv()
 
 import httpx
 import vercel_blob
 from fastapi import FastAPI, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("clearaudio")
+
+# Backend selection: "fal" or "modal"
+AUDIO_BACKEND = os.getenv("AUDIO_BACKEND", "fal").lower()
+logger.info("Audio backend: %s", AUDIO_BACKEND)
 
 app = FastAPI(
     title="ClearAudio Engine",
     description="Audio processing API powered by SAM Audio",
-    version="0.1.0",
+    version="0.2.0",
 )
 
-# Configure CORS for Next.js frontend
-# ALLOWED_ORIGINS can be comma-separated list of origins
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
@@ -37,13 +38,102 @@ app.add_middleware(
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"status": "ok", "service": "ClearAudio Engine"}
+    return {
+        "status": "ok",
+        "service": "ClearAudio Engine",
+        "backend": AUDIO_BACKEND,
+    }
 
 
 @app.get("/health")
 async def health():
     """Health check endpoint."""
-    return {"status": "healthy"}
+    return {"status": "healthy", "backend": AUDIO_BACKEND}
+
+
+async def _separate_with_fal(
+    audio_url: str,
+    description: str,
+    model_size: str,
+    high_quality: bool,
+    reranking_candidates: int,
+) -> dict:
+    """Process audio separation through fal.ai."""
+    from .fal_service import FalServiceError, separate
+
+    try:
+        result = await separate(
+            audio_url=audio_url,
+            description=description,
+            model_size=model_size,
+            high_quality=high_quality,
+            reranking_candidates=reranking_candidates,
+        )
+    except FalServiceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    target_resp = vercel_blob.put(
+        "output/target.wav",
+        result.target_bytes,
+        {"access": "public", "contentType": "audio/wav", "addRandomSuffix": True},
+    )
+    residual_resp = vercel_blob.put(
+        "output/residual.wav",
+        result.residual_bytes,
+        {"access": "public", "contentType": "audio/wav", "addRandomSuffix": True},
+    )
+
+    return {
+        "target_url": target_resp["url"],
+        "residual_url": residual_resp["url"],
+        "sample_rate": result.sample_rate,
+    }
+
+
+async def _separate_with_modal(
+    audio_url: str,
+    description: str,
+    model_size: str,
+    high_quality: bool,
+    reranking_candidates: int,
+) -> dict:
+    """Process audio separation through Modal (legacy backend)."""
+    import modal
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(audio_url)
+        response.raise_for_status()
+        audio_bytes = response.content
+
+    if len(audio_bytes) == 0:
+        raise HTTPException(status_code=400, detail="Empty audio file")
+
+    AudioSeparator = modal.Cls.from_name("clearclean-audio", "AudioSeparator")
+    separator = AudioSeparator(model_size=model_size)
+    result = separator.separate.remote(
+        audio_bytes=audio_bytes,
+        description=description,
+        high_quality=high_quality,
+        reranking_candidates=reranking_candidates,
+        source_url=audio_url,
+    )
+
+    target_resp = vercel_blob.put(
+        "output/target.wav",
+        result["target"],
+        {"access": "public", "contentType": "audio/wav", "addRandomSuffix": True},
+    )
+    residual_resp = vercel_blob.put(
+        "output/residual.wav",
+        result["residual"],
+        {"access": "public", "contentType": "audio/wav", "addRandomSuffix": True},
+    )
+
+    return {
+        "target_url": target_resp["url"],
+        "residual_url": residual_resp["url"],
+        "sample_rate": result["sample_rate"],
+    }
 
 
 @app.post("/api/separate")
@@ -56,109 +146,93 @@ async def separate_audio(
 ):
     """
     Separate audio using SAM Audio with text prompting.
-    
-    Args:
-        audio_url: URL to audio file in Vercel Blob storage
-        description: Text description of sound to isolate (e.g., "A man speaking")
-        model_size: Model size - small, base, large, or large-tv (for video)
-        high_quality: Use span prediction and re-ranking (slower but better)
-        reranking_candidates: Number of candidates for re-ranking (2-32, default 8)
-        
-    Returns:
-        JSON with URLs to target and residual audio in Vercel Blob
+
+    Dispatches to either fal.ai or Modal based on AUDIO_BACKEND env var.
+    The API contract is identical regardless of backend.
     """
-    import modal
-    
-    # Validate reranking candidates
     if reranking_candidates < 2 or reranking_candidates > 32:
         raise HTTPException(
             status_code=400,
-            detail="reranking_candidates must be between 2 and 32"
+            detail="reranking_candidates must be between 2 and 32",
         )
-    
-    # Download audio from Vercel Blob URL
+
+    logger.info("[INPUT]  %s", audio_url)
+    logger.info('[PROMPT] "%s"', description)
+    logger.info(
+        "[PARAMS] backend=%s, model=%s, high_quality=%s, candidates=%d",
+        AUDIO_BACKEND,
+        model_size,
+        high_quality,
+        reranking_candidates,
+    )
+
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(audio_url)
-            response.raise_for_status()
-            audio_bytes = response.content
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=400, detail=f"Failed to download audio: {str(e)}")
-    
-    if len(audio_bytes) == 0:
-        raise HTTPException(status_code=400, detail="Empty audio file")
-    
-    # Call deployed Modal app
-    try:
-        # Look up the deployed class (Modal 1.0+ API)
-        AudioSeparator = modal.Cls.from_name("clearclean-audio", "AudioSeparator")
-        separator = AudioSeparator(model_size=model_size)
-        result = separator.separate.remote(
-            audio_bytes=audio_bytes,
-            description=description,
-            high_quality=high_quality,
-            reranking_candidates=reranking_candidates,
-            source_url=audio_url,
-        )
-        
-        # Upload processed audio to Vercel Blob
-        target_resp = vercel_blob.put(
-            "output/target.wav",
-            result["target"],
-            {"access": "public", "contentType": "audio/wav", "addRandomSuffix": True}
-        )
-        residual_resp = vercel_blob.put(
-            "output/residual.wav",
-            result["residual"],
-            {"access": "public", "contentType": "audio/wav", "addRandomSuffix": True}
-        )
-        
-        target_url = target_resp["url"]
-        residual_url = residual_resp["url"]
-        
-        # Log the complete request summary
-        logger.info(f"[INPUT]  {audio_url}")
-        logger.info(f"[PROMPT] \"{description}\"")
-        logger.info(f"[PARAMS] model={model_size}, high_quality={high_quality}, candidates={reranking_candidates}")
-        logger.info(f"[OUTPUT] {target_url}")
-        logger.info(f"[TIME]   {result.get('processing_time', 0):.1f}s")
-        
-        # Return URLs to blob storage
-        return {
-            "target_url": target_url,
-            "residual_url": residual_url,
-            "sample_rate": result["sample_rate"],
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        if AUDIO_BACKEND == "fal":
+            result = await _separate_with_fal(
+                audio_url=audio_url,
+                description=description,
+                model_size=model_size,
+                high_quality=high_quality,
+                reranking_candidates=reranking_candidates,
+            )
+        elif AUDIO_BACKEND == "modal":
+            result = await _separate_with_modal(
+                audio_url=audio_url,
+                description=description,
+                model_size=model_size,
+                high_quality=high_quality,
+                reranking_candidates=reranking_candidates,
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Unknown AUDIO_BACKEND: {AUDIO_BACKEND!r}. "
+                f"Set to 'fal' or 'modal'.",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Separation failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    logger.info("[OUTPUT] %s", result["target_url"])
+    return result
 
 
 @app.get("/api/models")
 async def list_models():
     """List available model sizes and their descriptions."""
+    models = [
+        {
+            "id": "small",
+            "name": "Fast",
+            "description": "Quick processing, good for simple audio",
+        },
+        {
+            "id": "base",
+            "name": "Balanced",
+            "description": "Good balance of speed and quality",
+        },
+        {
+            "id": "large",
+            "name": "Best Quality",
+            "description": "Highest quality separation (recommended)",
+        },
+        {
+            "id": "large-tv",
+            "name": "Video Optimized",
+            "description": "Best for separating audio from video files",
+        },
+    ]
+
+    if AUDIO_BACKEND == "fal":
+        for m in models:
+            from .fal_service import ACCELERATION_MAP
+            accel = ACCELERATION_MAP.get(m["id"], "balanced")
+            m["backend_acceleration"] = accel
+
     return {
-        "models": [
-            {
-                "id": "small",
-                "name": "Fast",
-                "description": "Quick processing, good for simple audio",
-            },
-            {
-                "id": "base",
-                "name": "Balanced", 
-                "description": "Good balance of speed and quality",
-            },
-            {
-                "id": "large",
-                "name": "Best Quality",
-                "description": "Highest quality separation (recommended)",
-            },
-            {
-                "id": "large-tv",
-                "name": "Video Optimized",
-                "description": "Best for separating audio from video files",
-            },
-        ],
+        "models": models,
         "default": "large",
+        "backend": AUDIO_BACKEND,
     }
