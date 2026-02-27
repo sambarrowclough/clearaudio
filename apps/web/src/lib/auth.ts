@@ -5,8 +5,44 @@ import { nextCookies } from "better-auth/next-js";
 import { db } from "./db";
 import * as schema from "./db/schema";
 
+function getBaseURL(): string {
+  if (process.env.BETTER_AUTH_URL) {
+    return process.env.BETTER_AUTH_URL;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  return "http://localhost:3000";
+}
+
+function getTrustedOrigins(): string[] {
+  const origins: string[] = [];
+
+  if (process.env.BETTER_AUTH_URL) {
+    origins.push(process.env.BETTER_AUTH_URL);
+  }
+
+  // Vercel sets VERCEL_URL on every deployment (preview + production)
+  if (process.env.VERCEL_URL) {
+    origins.push(`https://${process.env.VERCEL_URL}`);
+  }
+
+  // VERCEL_BRANCH_URL is the stable URL for a given branch
+  if (process.env.VERCEL_BRANCH_URL) {
+    origins.push(`https://${process.env.VERCEL_BRANCH_URL}`);
+  }
+
+  // VERCEL_PROJECT_PRODUCTION_URL is the primary production domain
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    origins.push(`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`);
+  }
+
+  return origins;
+}
+
 export const auth = betterAuth({
-  baseURL: process.env.BETTER_AUTH_URL,
+  baseURL: getBaseURL(),
+  trustedOrigins: getTrustedOrigins(),
 
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -33,7 +69,7 @@ export const auth = betterAuth({
     emailOTP({
       async sendVerificationOTP({ email, otp }) {
         // Call our API endpoint to send the OTP email
-        const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3000";
+        const baseUrl = getBaseURL();
         const internalSecret = process.env.BETTER_AUTH_SECRET;
 
         if (!internalSecret) {
