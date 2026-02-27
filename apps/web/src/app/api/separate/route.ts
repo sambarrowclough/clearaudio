@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 const FAL_MODEL_ID = "fal-ai/sam-audio/separate";
 
+const VALID_MODEL_SIZES = ["small", "base", "large", "large-tv"] as const;
+
 const ACCELERATION_MAP: Record<string, string> = {
   small: "fast",
   base: "balanced",
@@ -14,8 +16,18 @@ const ACCELERATION_MAP: Record<string, string> = {
 const FAL_MAX_RERANKING_CANDIDATES = 7;
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY = 2000;
+const FAL_REQUEST_TIMEOUT_MS = 300_000;
 
 fal.config({ credentials: process.env.FAL_KEY });
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Request timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
 
 function isRetryable(err: unknown): boolean {
   const msg = String(err).toLowerCase();
@@ -29,7 +41,10 @@ async function callFalWithRetry(args: Record<string, unknown>) {
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const result = await fal.subscribe(FAL_MODEL_ID, { input: args });
+      const result = await withTimeout(
+        fal.subscribe(FAL_MODEL_ID, { input: args }),
+        FAL_REQUEST_TIMEOUT_MS
+      );
       return result.data;
     } catch (err) {
       lastError = err;
@@ -60,6 +75,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ detail: "audio_url and description are required" }, { status: 400 });
     }
 
+    if (!VALID_MODEL_SIZES.includes(modelSize as (typeof VALID_MODEL_SIZES)[number])) {
+      return NextResponse.json(
+        { detail: `Invalid model_size. Must be one of: ${VALID_MODEL_SIZES.join(", ")}` },
+        { status: 400 }
+      );
+    }
+
     if (rerankingCandidates < 2 || rerankingCandidates > 32) {
       return NextResponse.json(
         { detail: "reranking_candidates must be between 2 and 32" },
@@ -67,7 +89,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const acceleration = ACCELERATION_MAP[modelSize] || "balanced";
+    const acceleration = ACCELERATION_MAP[modelSize];
     const falArgs: Record<string, unknown> = {
       audio_url: audioUrl,
       prompt: description,
@@ -88,8 +110,9 @@ export async function POST(req: NextRequest) {
     const residualFalUrl = result?.residual?.url;
 
     if (!targetFalUrl || !residualFalUrl) {
+      console.error("fal.ai returned incomplete result:", result);
       return NextResponse.json(
-        { detail: `fal.ai returned incomplete result: target=${targetFalUrl}, residual=${residualFalUrl}` },
+        { detail: "Upstream separation service returned incomplete result" },
         { status: 502 }
       );
     }
@@ -118,9 +141,13 @@ export async function POST(req: NextRequest) {
       sample_rate: result.sample_rate ?? 48000,
     });
   } catch (err) {
-    console.error("Separation failed:", err);
     const message = err instanceof Error ? err.message : "Separation failed";
-    const status = message.includes("fal.ai") ? 502 : 500;
-    return NextResponse.json({ detail: message }, { status });
+    const isFalError = message.includes("fal.ai") || message.includes("timed out");
+    const status = isFalError ? 502 : 500;
+    console.error("Separation failed:", { status, error: message });
+    return NextResponse.json(
+      { detail: isFalError ? "Upstream separation service error" : "Separation failed" },
+      { status }
+    );
   }
 }
