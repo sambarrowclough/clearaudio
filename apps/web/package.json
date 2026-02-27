@@ -12,6 +12,7 @@
     "dev:stripe": "stripe listen --forward-to localhost:3000/api/stripe/webhook"
   },
   "dependencies": {
+    "@fal-ai/client": "^1.9.4",
     "@neondatabase/serverless": "^1.0.2",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",

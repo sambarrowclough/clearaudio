@@ -277,8 +277,7 @@ export default function Home() {
       formData.append("high_quality", highQuality.toString());
       formData.append("reranking_candidates", rerankingCandidates.toString());
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const response = await fetch(`${apiUrl}/api/separate`, {
+      const response = await fetch("/api/separate", {
         method: "POST",
         body: formData,
       });
@@ -951,18 +950,6 @@ export default function Home() {
               "Clean Audio"
             )}
           </button>
-          {/* Processing time warning - shown during processing */}
-          {isProcessing && (
-            <div
-              style={{
-                marginTop: "10px",
-                fontSize: "11px",
-                opacity: 0.5,
-              }}
-            >
-              Usually ~20 seconds, but may take up to 2 minutes
-            </div>
-          )}
         </div>
 
         {/* Error Message */}
