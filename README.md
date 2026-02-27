@@ -8,7 +8,7 @@
   <a href="https://clearaudio.app"><strong>Try it live →</strong></a>
 </p>
 
-Upload audio or video, describe what you want to keep ("the speaker", "the voice", "the music"), and we'll clean up the rest. Powered by Meta's SAM-Audio.
+Upload audio or video, describe what you want to keep ("the speaker", "the voice", "the music"), and we'll clean up the rest. Powered by Meta's SAM-Audio via [fal.ai](https://fal.ai).
 
 ## Project Structure
 
@@ -16,7 +16,7 @@ Upload audio or video, describe what you want to keep ("the speaker", "the voice
 clearaudio/
 ├── apps/
 │   ├── web/          # Next.js 16 frontend
-│   └── engine/       # Python FastAPI backend
+│   └── engine/       # Python FastAPI backend (fal.ai)
 ├── package.json      # Bun workspace config
 └── README.md
 ```
@@ -26,10 +26,8 @@ clearaudio/
 - [Bun](https://bun.sh/) (v1.0+)
 - [uv](https://docs.astral.sh/uv/) (Python package manager)
 - [Python](https://python.org/) (3.11+)
-- [Modal CLI](https://modal.com/docs/guide#getting-started) — installed and authenticated
-- [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/en/quick-start#authentication) — installed and authenticated
+- [fal.ai API key](https://fal.ai/dashboard/keys) — for serverless GPU inference
 - [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) — for file uploads and storage
-- [SAM-Audio model access](https://huggingface.co/facebook/sam-audio-large) — request access to the checkpoints (required)
 - [Neon Database](https://neon.tech/) — PostgreSQL database for auth
 - [Google Cloud Console](https://console.cloud.google.com/) — for Google OAuth (optional)
 - [Resend](https://resend.com/) — for sending magic link emails
@@ -74,37 +72,28 @@ You'll need:
 - **RESEND_API_KEY** — API key from [Resend](https://resend.com/) for magic link emails
 
 **Engine (`apps/engine/.env`):**
+- **FAL_KEY** — Get from [fal.ai dashboard](https://fal.ai/dashboard/keys)
 - **BLOB_READ_WRITE_TOKEN** — Get this from your [Vercel Blob storage settings](https://vercel.com/docs/storage/vercel-blob)
-- **MODAL_TOKEN_ID** / **MODAL_TOKEN_SECRET** — Get from [Modal settings](https://modal.com/settings)
 - **ALLOWED_ORIGINS** — CORS origins for the engine (default: `http://localhost:3000`)
-- **HF_TOKEN** — Hugging Face token (configured as Modal secret, see below)
-
-### Set Up Modal Secret for Hugging Face
-
-The Modal service needs access to your Hugging Face token to download the SAM-Audio model. Create a Modal secret:
-
-```bash
-modal secret create huggingface-secret HF_TOKEN=hf_your_token_here
-```
-
-Get your token from [Hugging Face settings](https://huggingface.co/settings/tokens).
 
 ### Run Development Servers
 
-**Frontend (Next.js):**
 ```bash
-bun run dev:web
+# Start both frontend and backend concurrently
+bun run dev
 ```
 
-**Backend (FastAPI):**
+Or individually:
+
 ```bash
-bun run dev:engine
+bun run dev:web      # Next.js on port 3000
+bun run dev:engine   # FastAPI on port 8000
 ```
 
 ## Tech Stack
 
 - **Frontend:** Next.js 16, React, TypeScript, Tailwind CSS
-- **Backend:** Python, FastAPI, Modal
+- **Backend:** Python, FastAPI, fal.ai
 - **Audio Model:** [SAM-Audio](https://github.com/facebookresearch/sam-audio) by Meta
 - **Package Managers:** Bun (frontend), uv (backend)
 

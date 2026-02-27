@@ -1,13 +1,10 @@
-"""Tests for the FastAPI application with fal.ai backend."""
+"""Tests for the FastAPI application."""
 
-import os
 from unittest.mock import patch
 
-os.environ["AUDIO_BACKEND"] = "fal"
+from fastapi.testclient import TestClient
 
-from fastapi.testclient import TestClient  # noqa: E402
-
-from src.engine.main import app  # noqa: E402
+from src.engine.main import app
 
 client = TestClient(app)
 
@@ -18,14 +15,12 @@ class TestHealthEndpoints:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
-        assert data["backend"] == "fal"
 
     def test_health(self):
         resp = client.get("/health")
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "healthy"
-        assert data["backend"] == "fal"
 
 
 class TestModelsEndpoint:
@@ -33,7 +28,6 @@ class TestModelsEndpoint:
         resp = client.get("/api/models")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["backend"] == "fal"
         assert len(data["models"]) == 4
         assert data["default"] == "large"
 
@@ -68,38 +62,45 @@ class TestSeparateEndpoint:
         )
         assert resp.status_code == 400
 
-    @patch("src.engine.main._separate_with_fal")
+    @patch("src.engine.main.separate")
     def test_successful_separation(self, mock_sep):
-        mock_sep.return_value = {
-            "target_url": "https://blob.vercel.com/target.wav",
-            "residual_url": "https://blob.vercel.com/residual.wav",
-            "sample_rate": 48000,
-        }
+        from unittest.mock import MagicMock
 
-        resp = client.post(
-            "/api/separate",
-            data={
-                "audio_url": "https://blob.vercel.com/input.wav",
-                "description": "a man speaking",
-                "model_size": "large",
-                "high_quality": "false",
-                "reranking_candidates": "8",
-            },
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "target_url" in data
-        assert "residual_url" in data
-        assert "sample_rate" in data
-        assert data["sample_rate"] == 48000
+        mock_result = MagicMock()
+        mock_result.target_bytes = b"target"
+        mock_result.residual_bytes = b"residual"
+        mock_result.sample_rate = 48000
 
-    @patch("src.engine.main._separate_with_fal")
+        mock_sep.return_value = mock_result
+
+        with patch("src.engine.main.vercel_blob.put") as mock_blob:
+            mock_blob.side_effect = [
+                {"url": "https://blob.vercel.com/target.wav"},
+                {"url": "https://blob.vercel.com/residual.wav"},
+            ]
+
+            resp = client.post(
+                "/api/separate",
+                data={
+                    "audio_url": "https://blob.vercel.com/input.wav",
+                    "description": "a man speaking",
+                    "model_size": "large",
+                    "high_quality": "false",
+                    "reranking_candidates": "8",
+                },
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "target_url" in data
+            assert "residual_url" in data
+            assert "sample_rate" in data
+            assert data["sample_rate"] == 48000
+
+    @patch("src.engine.main.separate")
     def test_fal_error_returns_502(self, mock_sep):
-        from fastapi import HTTPException
+        from src.engine.fal_service import FalServiceError
 
-        mock_sep.side_effect = HTTPException(
-            status_code=502, detail="fal.ai request failed"
-        )
+        mock_sep.side_effect = FalServiceError("fal.ai request failed")
 
         resp = client.post(
             "/api/separate",
@@ -110,7 +111,7 @@ class TestSeparateEndpoint:
         )
         assert resp.status_code == 502
 
-    @patch("src.engine.main._separate_with_fal")
+    @patch("src.engine.main.separate")
     def test_generic_error_returns_500(self, mock_sep):
         mock_sep.side_effect = RuntimeError("unexpected failure")
 

@@ -1,6 +1,6 @@
 # Engine
 
-Audio processing backend for ClearAudio, powered by SAM (Segment Anything for Audio).
+Audio processing backend for ClearAudio. Uses [fal.ai](https://fal.ai) to run Meta's [SAM-Audio](https://github.com/facebookresearch/sam-audio) model for text-prompted audio separation.
 
 ## Setup
 
@@ -10,36 +10,33 @@ uv sync
 
 # For development dependencies
 uv sync --group dev
-
-# Set up Modal authentication (first time only)
-uv run python3 -m modal setup
 ```
 
 ## Running
 
-### Local API Server
-
 ```bash
-uv run uvicorn engine.main:app --reload --port 8000
-```
+# From project root
+bun run dev:engine
 
-### Modal (Serverless GPU)
-
-```bash
-# Run the Modal app
-uv run modal run src/engine/modal_app.py
-
-# Deploy to Modal (production)
-uv run modal deploy src/engine/modal_app.py
+# Or directly
+PYTHONPATH=src uv run uvicorn engine.main:app --reload --port 8000
 ```
 
 ## API
 
-- `GET /` - Health check
-- `GET /health` - Health status
+- `GET /` — Health check
+- `GET /health` — Health status
+- `GET /api/models` — List available model sizes
+- `POST /api/separate` — Separate audio with a text prompt
 
-## Modal Functions
+### `POST /api/separate`
 
-- `square(x)` - Test function
-- `process_audio(audio_data, prompt)` - Process audio with SAM model
+Form data parameters:
 
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `audio_url` | string | required | URL of the audio file |
+| `description` | string | required | What to isolate (e.g. "the speaker") |
+| `model_size` | string | `"large"` | `small`, `base`, `large`, or `large-tv` |
+| `high_quality` | bool | `false` | Enable span prediction + reranking |
+| `reranking_candidates` | int | `8` | Candidates for reranking (2-32) |
