@@ -8,94 +8,62 @@
   <a href="https://clearaudio.app"><strong>Try it live →</strong></a>
 </p>
 
-Upload audio or video, describe what you want to keep ("the speaker", "the voice", "the music"), and we'll clean up the rest. Powered by Meta's SAM-Audio via [fal.ai](https://fal.ai).
-
-## Project Structure
-
-```
-clearaudio/
-├── apps/
-│   ├── web/          # Next.js 16 frontend
-│   └── engine/       # Python FastAPI backend (fal.ai)
-├── package.json      # Bun workspace config
-└── README.md
-```
+Upload audio or video, describe what you want to keep ("the speaker", "the voice", "the music"), and we'll clean up the rest. Powered by Meta's [SAM-Audio](https://github.com/facebookresearch/sam-audio) via [fal.ai](https://fal.ai).
 
 ## Prerequisites
 
 - [Bun](https://bun.sh/) (v1.0+)
-- [uv](https://docs.astral.sh/uv/) (Python package manager)
-- [Python](https://python.org/) (3.11+)
-- [fal.ai API key](https://fal.ai/dashboard/keys) — for serverless GPU inference
+- [fal.ai API key](https://fal.ai/dashboard/keys) — for serverless audio separation
 - [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) — for file uploads and storage
-- [Neon Database](https://neon.tech/) — PostgreSQL database for auth
+- [Neon Database](https://neon.tech/) — PostgreSQL for auth and usage tracking
+- [Resend](https://resend.com/) — for magic link emails
 - [Google Cloud Console](https://console.cloud.google.com/) — for Google OAuth (optional)
-- [Resend](https://resend.com/) — for sending magic link emails
 
 ## Getting Started
 
-### Install Frontend Dependencies
-
 ```bash
+# Install dependencies
 bun install
-```
 
-### Set Up Python Backend
-
-```bash
-cd apps/engine
-uv sync
-```
-
-### Configure Environment Variables
-
-Copy the example environment files and fill in your values:
-
-```bash
-# Web app
+# Set up environment variables
 cp apps/web/.env.example apps/web/.env.local
+# Fill in your values (see apps/web/.env.example for details)
 
-# Engine
-cp apps/engine/.env.example apps/engine/.env
-```
-
-You'll need:
-
-**Web App (`apps/web/.env.local`):**
-- **BLOB_READ_WRITE_TOKEN** — Get this from your [Vercel Blob storage settings](https://vercel.com/docs/storage/vercel-blob)
-- **NEXT_PUBLIC_API_URL** — URL of your backend (default: `http://localhost:8000`)
-- **DATABASE_URL** — PostgreSQL connection string from [Neon](https://neon.tech/)
-- **BETTER_AUTH_SECRET** — A random secret for Better Auth sessions (generate with `openssl rand -base64 32`)
-- **BETTER_AUTH_URL** — Base URL for auth callbacks (default: `http://localhost:3000`)
-- **GOOGLE_CLIENT_ID** — OAuth client ID from [Google Cloud Console](https://console.cloud.google.com/apis/credentials) (optional)
-- **GOOGLE_CLIENT_SECRET** — OAuth client secret from Google Cloud Console (optional)
-- **RESEND_API_KEY** — API key from [Resend](https://resend.com/) for magic link emails
-
-**Engine (`apps/engine/.env`):**
-- **FAL_KEY** — Get from [fal.ai dashboard](https://fal.ai/dashboard/keys)
-- **BLOB_READ_WRITE_TOKEN** — Get this from your [Vercel Blob storage settings](https://vercel.com/docs/storage/vercel-blob)
-- **ALLOWED_ORIGINS** — CORS origins for the engine (default: `http://localhost:3000`)
-
-### Run Development Servers
-
-```bash
-# Start both frontend and backend concurrently
+# Run development server
 bun run dev
 ```
 
-Or individually:
+The app will be available at [http://localhost:3000](http://localhost:3000).
 
-```bash
-bun run dev:web      # Next.js on port 3000
-bun run dev:engine   # FastAPI on port 8000
-```
+## Environment Variables
+
+**Required (`apps/web/.env.local`):**
+
+| Variable | Description |
+|----------|-------------|
+| `FAL_KEY` | [fal.ai API key](https://fal.ai/dashboard/keys) |
+| `BLOB_READ_WRITE_TOKEN` | [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) token |
+| `DATABASE_URL` | PostgreSQL connection string ([Neon](https://neon.tech/)) |
+| `BETTER_AUTH_SECRET` | Random secret (`openssl rand -base64 32`) |
+| `BETTER_AUTH_URL` | Base URL (default: `http://localhost:3000`) |
+| `RESEND_API_KEY` | [Resend](https://resend.com/) API key |
+
+**Optional:**
+
+| Variable | Description |
+|----------|-------------|
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
 
 ## Tech Stack
 
-- **Frontend:** Next.js 16, React, TypeScript, Tailwind CSS
-- **Backend:** Python, FastAPI, fal.ai
-- **Audio Model:** [SAM-Audio](https://github.com/facebookresearch/sam-audio) by Meta
-- **Package Managers:** Bun (frontend), uv (backend)
+- **Framework:** Next.js 16, React 19, TypeScript
+- **Audio AI:** [SAM-Audio](https://github.com/facebookresearch/sam-audio) via [fal.ai](https://fal.ai)
+- **Auth:** Better Auth (magic link + Google OAuth)
+- **Database:** Neon PostgreSQL + Drizzle ORM
+- **Payments:** Stripe
+- **Storage:** Vercel Blob
+- **Styling:** Tailwind CSS
 
 ## License
 

@@ -6,14 +6,8 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "concurrently -n web,engine -c blue,magenta \"bun run dev:web\" \"bun run dev:engine\"",
-    "dev:web": "bun run --filter web dev",
-    "dev:engine": "cd apps/engine && PYTHONPATH=src uv run uvicorn engine.main:app --reload --port 8000",
-    "build": "bun run --filter '*' build",
-    "build:web": "bun run --filter web build",
-    "lint:engine": "cd apps/engine && uv run ruff check src/"
-  },
-  "devDependencies": {
-    "concurrently": "^9.2.1"
+    "dev": "bun run --filter web dev",
+    "build": "bun run --filter web build",
+    "lint": "bun run --filter web lint"
   }
 }
